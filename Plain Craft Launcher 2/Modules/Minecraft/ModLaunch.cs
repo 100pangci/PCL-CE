@@ -132,49 +132,6 @@ public static class ModLaunch
             }, "Donate");
         }
 #endif
-        
-        #if DEBUG || DEBUGCI
-        return;
-        #endif
-
-        // 正版购买提示
-        if (!ProfileService.HasMicrosoftProfile)
-        {
-            if (Lang.IsFeaturesUnrestricted)
-            {
-                if (ModMain.MyMsgBox(
-                        Lang.Text("Minecraft.Launch.PurchaseHint.Message"),
-                        Lang.Text("Minecraft.Launch.PurchaseHint.Title"), Lang.Text("Minecraft.Launch.PurchaseHint.Purchase"), Lang.Text("Minecraft.Launch.PurchaseHint.Later")) ==
-                    1)
-                    ModBase.OpenWebsite(
-                        "https://www.xbox.com/zh-cn/games/store/minecraft-java-bedrock-edition-for-pc/9nxp44l49shj");
-            }
-            else
-            {                
-                switch (ModMain.MyMsgBox(Lang.Text("Minecraft.Launch.AccountVerification.Message"), 
-                            Lang.Text("Minecraft.Launch.AccountVerification.Title"), 
-                            Lang.Text("Minecraft.Launch.AccountVerification.Purchase"), 
-                            Lang.Text("Minecraft.Launch.AccountVerification.Demo"), 
-                            Lang.Text("Minecraft.Launch.AccountVerification.Back"),
-                            button1Action: () =>
-                                ModBase.OpenWebsite(
-                                    "https://www.xbox.com/zh-cn/games/store/minecraft-java-bedrock-edition-for-pc/9nxp44l49shj")))
-                {
-                    case 2:
-                    {
-                        HintService.Hint(Lang.Text("Minecraft.Launch.DemoMode"), HintType.Error);
-                        currentLaunchOptions.ExtraArgs.Add("--demo");
-                        break;
-                    }
-                    case 3:
-                    {
-                        throw new Exception("$$");
-                    }
-                }
-
-            }
-
-        }
     }
 
     #endregion
