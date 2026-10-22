@@ -63,6 +63,7 @@ jobs:
         with:
           draft: true
           tag_name: v${{ inputs.version }}
+          target_commitish: ${{ github.sha }}
           name: Release ${{ inputs.version }}
           body_path: CHANGELOG.md
           prerelease: ${{ inputs.configuration == 'Beta' }}
@@ -99,7 +100,7 @@ jobs:
         with:
           inputs: PCL2_CE_${{ matrix.configuration }}_${{ matrix.architecture }}.exe
           verify: true
-          verify-cert-identity: https://github.com/PCL-Community/PCL-CE/.github/workflows/release-publish.yml@refs/heads/dev
+          verify-cert-identity: https://github.com/${{ github.repository }}/.github/workflows/release-publish.yml@${{ github.ref }}
           verify-oidc-issuer: https://token.actions.githubusercontent.com
 
       - name: Upload binary and signature to Release
@@ -123,6 +124,7 @@ jobs:
           tag_name: v${{ inputs.version }}
 
       - name: Trigger MirrorChyanUploading
+        if: github.repository == 'PCL-Community/PCL-CE'
         run: |
           MRC_CHANNEL="stable"
           if [ "${{ inputs.configuration }}" = "Beta" ]; then
@@ -136,6 +138,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Trigger MirrorChyanReleaseNote
+        if: github.repository == 'PCL-Community/PCL-CE'
         run: |
           gh workflow run --repo $GITHUB_REPOSITORY mirrorchyan_release_note.yml
         env:
