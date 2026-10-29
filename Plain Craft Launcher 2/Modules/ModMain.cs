@@ -767,7 +767,7 @@ public static class ModMain
             if (frmLaunchLeft is null || frmLaunchLeft.AprilPosTrans is null || frmMain.lastMouseArg is null)
                 return;
             if (isAprilGiveup || frmMain.pageCurrent != FormMain.PageType.Launch ||
-                ModAnimation.AniControlEnabled != 0 || !frmLaunchLeft.BtnLaunch.IsLoaded)
+                ModAnimation.AniExitsAnyControl() || !frmLaunchLeft.BtnLaunch.IsLoaded)
                 return;
 
             // 计算是否空闲
@@ -874,22 +874,22 @@ public static class ModMain
                 {
                     case 0:
                     {
-                        HintService.Hint("放弃吧！只需要点一下右下角的小白旗……");
+                        HintService.Hint(Lang.Text("Main.April.Hint1"));
                         break;
                     }
                     case 1:
                     {
-                        HintService.Hint("看到右下角的那面小白旗了吗？");
+                        HintService.Hint(Lang.Text("Main.April.Hint2"));
                         break;
                     }
                     case 2:
                     {
-                        HintService.Hint("这里建议点一下右下角的小白旗投降呢.jpg");
+                        HintService.Hint(Lang.Text("Main.April.Hint3"));
                         break;
                     }
                     case 3:
                     {
-                        HintService.Hint("右下角的小白旗永远等着你……");
+                        HintService.Hint(Lang.Text("Main.April.Hint4"));
                         break;
                     }
                 }

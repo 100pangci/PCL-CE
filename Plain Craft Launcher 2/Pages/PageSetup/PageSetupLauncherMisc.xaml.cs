@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using PCL.Core.App;
 using PCL.Core.App.Configuration;
+using PCL.Core.App.Essentials;
 using PCL.Core.App.IoC;
 using PCL.Core.UI;
 using PCL.Core.App.Localization;
@@ -36,10 +37,10 @@ public partial class PageSetupLauncherMisc
             return;
         isLoaded = true;
 
-        ModAnimation.AniControlEnabled += 1;
+        ModAnimation.AniBeginControl();
         SliderLoad();
         Reload();
-        ModAnimation.AniControlEnabled -= 1;
+        ModAnimation.AniEndControl();
     }
 
     public void Reload()
@@ -50,6 +51,13 @@ public partial class PageSetupLauncherMisc
         SliderAniFPS.Value = Config.System.AnimationFpsLimit;
         SliderMaxLog.Value = Config.System.MaxGameLog;
         CheckSystemTelemetry.Checked = Config.System.Telemetry;
+        if (TelemetryService.IsBuildUntrusted)
+        {
+            CheckSystemTelemetry.Checked = false;
+            CheckSystemTelemetry.IsEnabled = false;
+            CheckSystemTelemetry.ToolTip = Lang.Text("Setup.Misc.System.Telemetry.Unavailable");
+            ToolTipService.SetShowOnDisabled(CheckSystemTelemetry, true);
+        }
 
         // 网络
         TextSystemHttpProxy.Text = Config.Network.HttpProxy.CustomAddress;
@@ -93,7 +101,7 @@ public partial class PageSetupLauncherMisc
     private void ComboChange(object senderRaw, SelectionChangedEventArgs e)
     {
         var sender = (MyComboBox)senderRaw;
-        if (ModAnimation.AniControlEnabled == 0)
+        if (!ModAnimation.AniExitsAnyControl())
             SetByTag(sender.Tag?.ToString(), sender.SelectedIndex);
     }
 
@@ -101,21 +109,22 @@ public partial class PageSetupLauncherMisc
     {
         var sender = (MyRadioBox)senderRaw;
         var gotCfg = sender.Tag?.ToString()?.Split("/") ?? Array.Empty<string>();
-        if (ModAnimation.AniControlEnabled == 0 && gotCfg.Length >= 2)
+        if (!ModAnimation.AniExitsAnyControl() && gotCfg.Length >= 2)
             SetByTag(gotCfg[0], int.Parse(gotCfg[1]));
     }
 
     private void CheckBoxChange(object senderRaw, bool user)
     {
         var sender = (MyCheckBox)senderRaw;
-        if (ModAnimation.AniControlEnabled == 0)
+        if (!user) return;
+        if (!ModAnimation.AniExitsAnyControl())
             SetByTag(sender.Tag?.ToString(), sender.Checked);
     }
 
     private void SliderChange(object senderRaw, bool user)
     {
         var sender = (MySlider)senderRaw;
-        if (ModAnimation.AniControlEnabled == 0)
+        if (!ModAnimation.AniExitsAnyControl())
             SetByTag(sender.Tag?.ToString(), sender.Value);
     }
 
@@ -163,14 +172,14 @@ public partial class PageSetupLauncherMisc
     // 调试模式
     private void CheckDebugMode_Change(object _, bool __)
     {
-        if (ModAnimation.AniControlEnabled == 0)
+        if (!ModAnimation.AniExitsAnyControl())
             HintService.Hint(Lang.Text("Setup.Misc.Debug.Mode.Hint"), log: false);
     }
 
     // 自动更新
     private void ComboSystemActivity_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (ModAnimation.AniControlEnabled != 0)
+        if (ModAnimation.AniExitsAnyControl())
             return;
         if (ComboSystemActivity.SelectedIndex != 2)
             return;
