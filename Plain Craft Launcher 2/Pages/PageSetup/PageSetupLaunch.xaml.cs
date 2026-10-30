@@ -92,7 +92,9 @@ public partial class PageSetupLaunch : IPageView
             if (SystemInfo.IsArm64System)
             {
                 CheckAdvanceDisableJLW.Checked = true;
-                CheckAdvanceDisableJLW.ToolTip = Lang.Text("Setup.Launch.Advanced.DisableJlw.Arm64Notice");
+                CheckAdvanceDisableJLW.TrySetLocalizedValue(
+                    "ToolTip",
+                    "Setup.Launch.Advanced.DisableJlw.Arm64Notice");
             }
             else
             {

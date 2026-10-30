@@ -89,8 +89,8 @@ public partial class PageSetupUpdate : IPageView
         Common.Log("[Update] 开始检查更新");
         _vm.ShowUpdateCard = false;
         _vm.ShowCheckCard = true;
-        _vm.CurrentDescText = Lang.Text("Setup.Update.Checking");
         _vm.CheckAgainEnabled = false;
+        TextCurrentDesc.TrySetLocalizedValue("Text", "Setup.Update.Checking");
         switch (await IsLatestAsync())
         {
             case UpdateStatus.Available:
@@ -105,7 +105,7 @@ public partial class PageSetupUpdate : IPageView
                     _vm.UpdateNameText = "PCL CE " + VersionNameFormat(updateInfo.VersionName);
                     var summary = updateInfo.Changelog.Between("<summary>", "</summary>");
                     if (!updateInfo.Changelog.Contains("<summary>") || string.IsNullOrWhiteSpace(summary.Trim()))
-                        TextChangelog.Text = Lang.Text("Setup.Update.Changelog.Empty");
+                        TextChangelog.TrySetLocalizedValue("Text", "Setup.Update.Changelog.Empty");
                     else
                         TextChangelog.Text = summary;
                 }
@@ -118,6 +118,7 @@ public partial class PageSetupUpdate : IPageView
                 if (updateInfo is null)
                 {
                     _vm.CurrentDescText = Lang.Text("Setup.Update.CheckFailed");
+                    TextCurrentDesc.TrySetLocalizedValue("Text", "Setup.Update.CheckFailed");
                     if (checkUpdateEx is not null)
                         Common.Log(
                             checkUpdateEx,
@@ -139,12 +140,12 @@ public partial class PageSetupUpdate : IPageView
                 }
                 else if (UpdateManager.isUpdateWaitingRestart)
                 {
-                    BtnUpdate.Text = Lang.Text("Setup.Update.RestartInstall");
+                    BtnUpdate.TrySetLocalizedValue("Text", "Setup.Update.RestartInstall");
                     BtnUpdate.IsEnabled = true;
                 }
                 else
                 {
-                    BtnUpdate.Text = Lang.Text("Setup.Update.Install");
+                    BtnUpdate.TrySetLocalizedValue("Text", "Setup.Update.Install");
                     BtnUpdate.IsEnabled = true;
                 }
 
@@ -158,6 +159,7 @@ public partial class PageSetupUpdate : IPageView
                 _vm.ShowCheckCard = true;
                 _vm.CheckAgainEnabled = true;
                 _vm.CurrentDescText = Lang.Text("Setup.Update.Latest");
+                TextCurrentDesc.TrySetLocalizedValue("Text", "Setup.Update.Latest");
                 break;
             }
             case UpdateStatus.Error:
@@ -166,6 +168,7 @@ public partial class PageSetupUpdate : IPageView
                 _vm.ShowCheckCard = true;
                 _vm.CheckAgainEnabled = true;
                 _vm.CurrentDescText = Lang.Text("Setup.Update.CheckFailed");
+                TextCurrentDesc.TrySetLocalizedValue("Text", "Setup.Update.CheckFailed");
                 break;
             }
         }
