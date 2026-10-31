@@ -1170,6 +1170,9 @@
 
     <sys:String x:Key="Instance.Resource.Item.ErrorSuffix"> [Error]</sys:String>
     <sys:String x:Key="Instance.Resource.Item.FolderTag">Folder</sys:String>
+    <sys:String x:Key="Instance.Resource.Item.LitematicTag">Litematica schematic</sys:String>
+    <sys:String x:Key="Instance.Resource.Item.SchematicTag">Schematic structure</sys:String>
+    <sys:String x:Key="Instance.Resource.Item.StructureTag">Vanilla structure</sys:String>
     <sys:String x:Key="Instance.Resource.Item.InfoUnavailable">Unable to get information</sys:String>
     <sys:String x:Key="Instance.Resource.Item.OpenChangelogFailed">Failed to open changelog</sys:String>
     <sys:String x:Key="Instance.Resource.Item.Update">Update</sys:String>
@@ -1655,7 +1658,6 @@
     <sys:String x:Key="Launch.Account.Profile.Error.Read">Failed to read profile list.</sys:String>
     <sys:String x:Key="Launch.Account.Profile.Error.Write">Failed to write profile list.</sys:String>
     <sys:String x:Key="Launch.Account.Profile.ImportExport">Import / Export</sys:String>
-    <sys:String x:Key="Launch.Account.Profile.RequireMicrosoftHint">A Microsoft profile is required to create profiles using other login types</sys:String>
     <sys:String x:Key="Launch.Account.Profile.Saved">Profile saved!</sys:String>
     <sys:String x:Key="Launch.Account.Profile.SelectHint">Select a profile before launching the game</sys:String>
     <sys:String x:Key="Launch.Account.Profile.Uuid.ChangeTitle">Change UUID for profile {0}</sys:String>
@@ -2410,8 +2412,6 @@
 
     <!-- Region -->
 
-    <sys:String x:Key="Region.Feature.Restricted">Minecraft downloads, repairs, and modpack installation are unavailable in your country or region.</sys:String>
-    <sys:String x:Key="Region.Feature.Unknown">Could not determine region info. Minecraft downloads, repairs, and modpack installation are temporarily unavailable.</sys:String>
 
     <!-- Select -->
 
@@ -3052,8 +3052,6 @@
     <sys:String x:Key="Setup.Misc.System.ImportSettings.SelectTitle">Select config file</sys:String>
     <sys:String x:Key="Setup.Misc.System.ImportSettings.Success.Message">Settings imported successfully! Please restart PCL CE to apply them...</sys:String>
     <sys:String x:Key="Setup.Misc.System.ImportSettings.Success.Restart">Restart</sys:String>
-    <sys:String x:Key="Setup.Misc.System.MaxFps">Maximum animation FPS</sys:String>
-    <sys:String x:Key="Setup.Misc.System.MaxFps.ToolTip">If you have disabled hardware acceleration, it is recommended to lower the maximum animation FPS to prevent excessive resource usage.</sys:String>
     <sys:String x:Key="Setup.Misc.System.MaxLogLines">Real-time log lines</sys:String>
     <sys:String x:Key="Setup.Misc.System.MaxLogLines.ToolTip">Maximum number of lines displayed in the real-time log feature. Old logs are automatically deleted when exceeded.</sys:String>
     <sys:String x:Key="Setup.Misc.System.MaxLogLines.Unlimited">Unlimited</sys:String>

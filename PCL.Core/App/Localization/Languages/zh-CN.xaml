@@ -1170,6 +1170,9 @@
 
     <sys:String x:Key="Instance.Resource.Item.ErrorSuffix"> [错误]</sys:String>
     <sys:String x:Key="Instance.Resource.Item.FolderTag">文件夹</sys:String>
+    <sys:String x:Key="Instance.Resource.Item.LitematicTag">投影原理图</sys:String>
+    <sys:String x:Key="Instance.Resource.Item.SchematicTag">Schematic 结构</sys:String>
+    <sys:String x:Key="Instance.Resource.Item.StructureTag">原版结构</sys:String>
     <sys:String x:Key="Instance.Resource.Item.InfoUnavailable">存在错误，无法获取信息</sys:String>
     <sys:String x:Key="Instance.Resource.Item.OpenChangelogFailed">打开更新日志出现错误</sys:String>
     <sys:String x:Key="Instance.Resource.Item.Update">更新</sys:String>
@@ -1655,7 +1658,6 @@
     <sys:String x:Key="Launch.Account.Profile.Error.Read">读取档案列表失败</sys:String>
     <sys:String x:Key="Launch.Account.Profile.Error.Write">写入档案列表失败</sys:String>
     <sys:String x:Key="Launch.Account.Profile.ImportExport">导入 / 导出</sys:String>
-    <sys:String x:Key="Launch.Account.Profile.RequireMicrosoftHint">需要先进行一次正版验证才能使用其他验证方式</sys:String>
     <sys:String x:Key="Launch.Account.Profile.Saved">档案信息已保存！</sys:String>
     <sys:String x:Key="Launch.Account.Profile.SelectHint">选择一个档案以启动游戏</sys:String>
     <sys:String x:Key="Launch.Account.Profile.Uuid.ChangeTitle">更改档案 {0} 的 UUID</sys:String>
@@ -2410,8 +2412,6 @@
 
     <!-- Region -->
 
-    <sys:String x:Key="Region.Feature.Restricted">Minecraft 下载、补全与整合包安装功能在你所在的国家或地区不可用。</sys:String>
-    <sys:String x:Key="Region.Feature.Unknown">无法获取区域信息，暂时无法使用 Minecraft 下载、补全与整合包安装功能。</sys:String>
 
     <!-- Select -->
 
@@ -3052,8 +3052,6 @@
     <sys:String x:Key="Setup.Misc.System.ImportSettings.SelectTitle">选择配置文件</sys:String>
     <sys:String x:Key="Setup.Misc.System.ImportSettings.Success.Message">配置导入成功！请重启 PCL CE 以应用配置……</sys:String>
     <sys:String x:Key="Setup.Misc.System.ImportSettings.Success.Restart">重启</sys:String>
-    <sys:String x:Key="Setup.Misc.System.MaxFps">最高动画帧率</sys:String>
-    <sys:String x:Key="Setup.Misc.System.MaxFps.ToolTip">如果你禁用了硬件加速，那么建议你调低最高动画帧率以防止过多的资源占用</sys:String>
     <sys:String x:Key="Setup.Misc.System.MaxLogLines">实时日志行数</sys:String>
     <sys:String x:Key="Setup.Misc.System.MaxLogLines.ToolTip">实时日志功能中最大显示行数，超过该值会自动删除旧的日志。</sys:String>
     <sys:String x:Key="Setup.Misc.System.MaxLogLines.Unlimited">无限制</sys:String>
