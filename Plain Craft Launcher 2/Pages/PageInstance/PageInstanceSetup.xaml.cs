@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
@@ -873,7 +873,7 @@ public partial class PageInstanceSetup : IPageView
         if (ctl is not null) ctl.IsEnabled = false;
         try
         {
-            if (Animations.AniExitsAnyControl())
+            if (Animations.AniExitsAnyControl() || sender is not MyComboBox combo || (!combo.IsDropDownOpen && !Keyboard.IsKeyDown(Key.Enter)))
                 return;
             if (isReverting)
                 return;
@@ -942,7 +942,7 @@ public partial class PageInstanceSetup : IPageView
         if (ctl is not null) ctl.IsEnabled = false;
         try
         {
-            if (Animations.AniExitsAnyControl())
+            if (Animations.AniExitsAnyControl() || sender is not MyComboBox combo || (!combo.IsDropDownOpen && !Keyboard.IsKeyDown(Key.Enter)))
                 return;
 
             var args = e; // 转换事件参数
