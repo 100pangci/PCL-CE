@@ -2,7 +2,9 @@
 using System.Text;
 using PCL.Core.App;
 using PCL.Core.App.Localization;
+using PCL.Core.UI.Hints;
 using PCL.Core.UI;
+using PCL.Core.UI.Dialogs;
 using PCL.Network.Loaders;
 
 namespace PCL;
@@ -21,7 +23,7 @@ public static partial class Comp
             {
                 try
                 {
-                    HintService.Hint(Lang.Text("Download.Comp.QuickDownload.Hint.Loading"));
+                    HintService.Show(Hints.Info(Lang.Text("Download.Comp.QuickDownload.Hint.Loading")));
                     var files = FilterFilesByType(
                         [
                             .. CompFilesGet(project.Id, project.FromCurseForge)
@@ -30,7 +32,7 @@ public static partial class Comp
                         project.Type);
                     if (files.Count == 0)
                     {
-                        HintService.Hint(Lang.Text("Download.Comp.QuickDownload.Hint.NoFile"));
+                        HintService.Show(Hints.Info(Lang.Text("Download.Comp.QuickDownload.Hint.NoFile")));
                         return;
                     }
 
@@ -57,11 +59,16 @@ public static partial class Comp
                                         "Download.Comp.QuickDownload.ChooseMethod.AskPath")
                                 }
                             };
-                            return Launcher.MyMsgBoxSelect(
-                                options,
-                                Lang.Text("Download.Comp.QuickDownload.ChooseMethod.Title"),
-                                Lang.Text("Common.Action.Continue"),
-                                Lang.Text("Common.Action.Cancel"));
+                            return DialogService.Instance.Show(new SelectDialogRequest
+                            {
+                                Title = Lang.Text("Download.Comp.QuickDownload.ChooseMethod.Title"),
+                                Options = PCL.DialogOptions.From(options),
+                                Buttons = DialogButtons.From(
+                                    DialogButton.Create(Lang.Text("Common.Action.Continue")),
+                                    DialogButton.Create(Lang.Text("Common.Action.Cancel"))),
+                                HighLight = false,
+                                ForceWait = true
+                            }).Result?.SelectedIndex;
                         });
                         if (choice is null) return;
                         behavior = choice.Value + 1;
@@ -111,7 +118,7 @@ public static partial class Comp
     {
         if (instance is null)
         {
-            HintService.Hint(Lang.Text("Download.Comp.QuickDownload.Hint.NoInstance"));
+            HintService.Show(Hints.Info(Lang.Text("Download.Comp.QuickDownload.Hint.NoInstance")));
             return;
         }
 
@@ -122,7 +129,7 @@ public static partial class Comp
         var file = _PickLatestFile(compatible);
         if (file is null)
         {
-            HintService.Hint(Lang.Text("Download.Comp.QuickDownload.Hint.NoCompatibleFile"));
+            HintService.Show(Hints.Info(Lang.Text("Download.Comp.QuickDownload.Hint.NoCompatibleFile")));
             return;
         }
 
@@ -132,9 +139,7 @@ public static partial class Comp
         if (startedTargets is not null && !startedTargets.Add(target))
             return;
         _StartQuickDownload(file, target);
-        HintService.Hint(
-            Lang.Text("Download.Comp.QuickDownload.Hint.DownloadStarted", project.RawName),
-            HintType.Success);
+        HintService.Show(Hints.Success(Lang.Text("Download.Comp.QuickDownload.Hint.DownloadStarted", project.RawName)));
     }
 
     /// <summary>弹实例列表让用户选择，返回选中的实例（兼容者优先、当前选中实例居首）；取消或无兼容实例返回 null。</summary>
@@ -146,7 +151,7 @@ public static partial class Comp
         if (needLoad)
         {
             if (string.IsNullOrEmpty(GameFolders.mcFolderSelected)) return null;
-            HintService.Hint(Lang.Text("Download.Comp.QuickDownload.Hint.Loading"));
+            HintService.Show(Hints.Info(Lang.Text("Download.Comp.QuickDownload.Hint.Loading")));
             Loading.LoaderFolderRun(
                 InstanceList.mcInstanceListLoader,
                 GameFolders.mcFolderSelected,
@@ -168,7 +173,7 @@ public static partial class Comp
             .ToList();
         if (compatible.Count == 0)
         {
-            HintService.Hint(Lang.Text("Download.Comp.QuickDownload.Hint.NoCompatibleInstance"));
+            HintService.Show(Hints.Info(Lang.Text("Download.Comp.QuickDownload.Hint.NoCompatibleInstance")));
             return null;
         }
 
@@ -188,11 +193,17 @@ public static partial class Comp
                     Title = v.Name
                 })
                 .ToList();
-            return Launcher.MyMsgBoxMultiSelect(
-                options,
-                Lang.Text("Download.Comp.QuickDownload.ChooseInstance.Title"),
-                Lang.Text("Common.Action.Continue"),
-                Lang.Text("Common.Action.Cancel"));
+            return DialogService.Instance.Show(new SelectDialogRequest
+            {
+                Title = Lang.Text("Download.Comp.QuickDownload.ChooseInstance.Title"),
+                Options = PCL.DialogOptions.From(options),
+                MultiSelect = true,
+                Buttons = DialogButtons.From(
+                    DialogButton.Create(Lang.Text("Common.Action.Continue")),
+                    DialogButton.Create(Lang.Text("Common.Action.Cancel"))),
+                HighLight = false,
+                ForceWait = true
+            }).Result?.SelectedIndices?.ToList();
         });
         if (indices is null) return null;
         return [.. indices.Select(i => compatible[i])];
@@ -204,7 +215,7 @@ public static partial class Comp
         var file = _PickLatestFile(files);
         if (file is null)
         {
-            HintService.Hint(Lang.Text("Download.Comp.QuickDownload.Hint.NoFile"));
+            HintService.Show(Hints.Info(Lang.Text("Download.Comp.QuickDownload.Hint.NoFile")));
             return;
         }
 
@@ -213,9 +224,7 @@ public static partial class Comp
         if (string.IsNullOrWhiteSpace(saveFolder)) return;
         var target = Path.Combine(saveFolder, CompFileNameGet(project, file));
         _StartQuickDownload(file, target);
-        HintService.Hint(
-            Lang.Text("Download.Comp.QuickDownload.Hint.DownloadStarted", project.RawName),
-            HintType.Success);
+        HintService.Show(Hints.Success(Lang.Text("Download.Comp.QuickDownload.Hint.DownloadStarted", project.RawName)));
     }
 
     /// <summary>构造并启动单文件下载任务（与详情页 Save_Click 末段一致）。</summary>

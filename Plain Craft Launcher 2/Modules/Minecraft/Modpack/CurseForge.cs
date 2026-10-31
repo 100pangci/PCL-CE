@@ -1,6 +1,8 @@
 ﻿using System.IO;
 using System.IO.Compression;
 using PCL.Core.App.Localization;
+using PCL.Core.UI.Hints;
+using PCL.Core.UI.Dialogs;
 using PCL.Core.Utils;
 using PCL.Network;
 using PCL.Network.Loaders;
@@ -65,7 +67,7 @@ public static partial class Modpack
         var loaderIdentifier = $"Modpack:CurseForge:{instanceName}";
         if (loaderTaskbar.Any(l => l.Identifier == loaderIdentifier))
         {
-            HintService.Hint(Lang.Text("Minecraft.Download.Modpack.Installing"), HintType.Error);
+            HintService.Show(Hints.Error(Lang.Text("Minecraft.Download.Modpack.Installing")));
             throw new Common.CancelledException();
         }
 
@@ -183,10 +185,9 @@ public static partial class Modpack
         {
             if (modEntry["projectID"] is null || modEntry["fileID"] is null)
             {
-                HintService.Hint(
-                    Lang.Text(
+                HintService.Show(Hints.Info(Lang.Text(
                         "Minecraft.Download.Modpack.ModMissingRequiredInfoSkipped",
-                        modEntry));
+                        modEntry)));
                 continue;
             }
 
@@ -289,15 +290,19 @@ public static partial class Modpack
             if (fileList.ContainsKey(id))
                 continue;
             if (modOptionalList.Contains(id)
-                && Launcher.MyMsgBox(
-                    Lang.Text(
-                        "Minecraft.Download.Modpack.OptionalFile.Message",
-                        modJson["displayName"]
-                    ),
-                    Lang.Text("Minecraft.Download.Modpack.OptionalFile.Title"),
-                    Lang.Text("Minecraft.Download.Modpack.OptionalFile.Download"),
-                    Lang.Text("Minecraft.Download.Modpack.OptionalFile.Skip")
-                )
+                && DialogService.Instance.Show(new TextDialogRequest
+                    {
+                        Title = Lang.Text("Minecraft.Download.Modpack.OptionalFile.Title"),
+                        Content = Lang.Text(
+                            "Minecraft.Download.Modpack.OptionalFile.Message",
+                            modJson["displayName"]
+                        ),
+                        Buttons = DialogButtons.From(
+                            DialogButton.Create(Lang.Text("Minecraft.Download.Modpack.OptionalFile.Download")),
+                            DialogButton.Create(Lang.Text("Minecraft.Download.Modpack.OptionalFile.Skip"))),
+                        ForceWait = true
+                    }).Result
+                    ?.Button
                 == 2)
                 continue;
 

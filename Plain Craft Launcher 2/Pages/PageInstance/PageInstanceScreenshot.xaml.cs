@@ -7,11 +7,12 @@ using System.Windows.Media.Imaging;
 using Microsoft.VisualBasic.FileIO;
 using PCL.Core.App;
 using PCL.Core.App.Localization;
+using PCL.Core.UI.Hints;
 using SearchOption = System.IO.SearchOption;
 
 namespace PCL;
 
-public partial class PageInstanceScreenshot : IRefreshable
+public partial class PageInstanceScreenshot : IRefreshable, IPageView
 {
     private bool _AppendLock;
     private int _Offset;
@@ -22,15 +23,23 @@ public partial class PageInstanceScreenshot : IRefreshable
 
     private bool isLoad;
     private string screenshotPath;
+    private bool _refreshed;
 
     public PageInstanceScreenshot()
     {
         InitializeComponent();
         DataContext = _vm;
         Loaded += PageSetupLaunch_Loaded;
-        PanBack.ScrollChanged += RequireAppend;
-        BtnOpenFolder.Click += BtnOpenFolder_Click;
-        BtnOpenFolderTop.Click += BtnOpenFolder_Click;
+        Unloaded += (_, _) => _refreshed = false;
+    }
+
+    public void OnNavigatedTo(object? parameter)
+    {
+        RefreshOnNavigate();
+    }
+
+    public void OnNavigatedFrom()
+    {
     }
 
     public PageInstanceScreenshotViewModel ViewModel => _vm;
@@ -50,11 +59,19 @@ public partial class PageInstanceScreenshot : IRefreshable
         if (Launcher.frmInstanceScreenshot is not null)
             await Launcher.frmInstanceScreenshot.ReloadAsync();
         Launcher.frmInstanceLeft.ItemScreenshot.Checked = true;
-        HintService.Hint(Lang.Text("Instance.Saves.Status.Refreshing"), log: false);
+        HintService.Show(Hints.Info(Lang.Text("Instance.Saves.Status.Refreshing"), log: false));
     }
 
     private void PageSetupLaunch_Loaded(object sender, RoutedEventArgs e)
     {
+        RefreshOnNavigate();
+    }
+
+    private void RefreshOnNavigate()
+    {
+        if (_refreshed)
+            return;
+        _refreshed = true;
         // 重复加载部分
         PanBack.ScrollToHome();
         screenshotPath = PageInstanceLeft.McInstance.PathIndie + @"screenshots\";
@@ -208,32 +225,34 @@ public partial class PageInstanceScreenshot : IRefreshable
                 var btnOpen = new MyIconTextButton
                 {
                     Name = "BtnOpen",
+                    Text = Lang.Text("Common.Action.Open"),
                     LogoScale = 0.8d,
                     SvgIcon = "lucide/folder-open",
                     Tag = i
                 };
-                btnOpen.TrySetLocalizedValue("Text", "Common.Action.Open");
-                btnOpen.Click += (s, ev) => BtnOpen_Click((MyIconTextButton)s, ev);
+                btnOpen.Command = _vm.OpenScreenshotCommand;
+                btnOpen.CommandParameter = i;
                 stackPanel.Children.Add(btnOpen);
                 var btnDelete = new MyIconTextButton
                 {
                     Name = "BtnDelete",
+                    Text = Lang.Text("Common.Action.Delete"),
                     LogoScale = 0.8d,
                     SvgIcon = "lucide/trash-2",
                     Tag = i
                 };
-                btnDelete.TrySetLocalizedValue("Text", "Common.Action.Delete");
                 btnDelete.Click += (s, ev) => BtnDelete_Click((MyIconTextButton)s, ev);
                 stackPanel.Children.Add(btnDelete);
                 var btnCopy = new MyIconTextButton
                 {
                     Name = "BtnCopy",
+                    Text = Lang.Text("Common.Action.Copy"),
                     LogoScale = 0.8d,
                     SvgIcon = "lucide/copy",
                     Tag = i
                 };
-                btnCopy.TrySetLocalizedValue("Text", "Common.Action.Copy");
-                btnCopy.Click += (s, ev) => BtnCopy_Click((MyIconTextButton)s, ev);
+                btnCopy.Command = _vm.CopyScreenshotCommand;
+                btnCopy.CommandParameter = i;
                 stackPanel.Children.Add(btnCopy);
                 PanList.Children.Add(myCard);
                 myCard.Opacity = 0d;
@@ -272,11 +291,6 @@ public partial class PageInstanceScreenshot : IRefreshable
         return (string)sender.Tag;
     }
 
-    private void BtnOpen_Click(MyIconTextButton sender, EventArgs e)
-    {
-        Common.OpenExplorer(GetPathFromSender(sender));
-    }
-
     private void BtnDelete_Click(MyIconTextButton sender, EventArgs e)
     {
         var path = GetPathFromSender(sender);
@@ -285,7 +299,7 @@ public partial class PageInstanceScreenshot : IRefreshable
             FileSystem.DeleteFile(path, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
             RemoveItem(path);
             RefreshTip();
-            HintService.Hint(Lang.Text("Instance.Screenshot.Deleted"));
+            HintService.Show(Hints.Info(Lang.Text("Instance.Screenshot.Deleted")));
         }
         catch (Exception ex)
         {
@@ -295,41 +309,5 @@ public partial class PageInstanceScreenshot : IRefreshable
                 Common.LogLevel.Hint,
                 userSummary: Lang.Text("Instance.Screenshot.DeleteFailed"));
         }
-    }
-
-    private void BtnCopy_Click(MyIconTextButton sender, EventArgs e)
-    {
-        var imagePath = GetPathFromSender(sender);
-        if (File.Exists(imagePath))
-        {
-            var tryTime = 0;
-            while (tryTime <= 5)
-                try
-                {
-                    Common.Log("[Screenshot] 尝试复制" + imagePath + "到剪贴板");
-                    Clipboard.SetImage(new BitmapImage(new Uri(imagePath)));
-                    HintService.Hint(Lang.Text("Instance.Screenshot.CopiedToClipboard"));
-                    tryTime = 6;
-                    return;
-                }
-                catch (Exception ex)
-                {
-                    tryTime += 1;
-                    Common.Log(ex, $"[Screenshot]第 {tryTime} 次复制尝试失败");
-                }
-
-            HintService.Hint(Lang.Text("Instance.Screenshot.CopyFailed"), HintType.Error);
-        }
-        else
-        {
-            HintService.Hint(Lang.Text("Instance.Screenshot.FileNotFound"));
-        }
-    }
-
-    private void BtnOpenFolder_Click(object sender, MouseButtonEventArgs e)
-    {
-        if (!Directory.Exists(screenshotPath))
-            Directory.CreateDirectory(screenshotPath);
-        Common.OpenExplorer(screenshotPath);
     }
 }

@@ -1,4 +1,3 @@
-﻿using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -6,19 +5,22 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using PCL.Core.UI;
-using PCL.Core.Utils;
+using PCL.Core.UI.Dialogs;
 using PCL.Network;
 using PCL.Network.Loaders;
 using PCL.Core.App.Localization;
+using PCL.Core.UI.Hints;
 
 namespace PCL;
 
-public partial class PageDownloadCompFavorites
+public partial class PageDownloadCompFavorites : IPageView
 {
     private readonly List<MyListItem> compItemList = new();
     private List<MyListItem> selectedItemList = new();
 
     private readonly PageDownloadCompFavoritesViewModel _vm = new();
+
+    private bool _refreshed;
 
     public PageDownloadCompFavoritesViewModel ViewModel => _vm;
 
@@ -28,9 +30,10 @@ public partial class PageDownloadCompFavorites
             CompFavoritesGet, inputDelegate: LoaderInput);
         Initialized += PageDownloadCompFavorites_Inited;
         Loaded += PageDownloadCompFavorites_Loaded;
-        KeyDown += Page_KeyDown;
+        Unloaded += (_, _) => _refreshed = false;
         InitializeComponent();
         DataContext = _vm;
+        DialogServiceInstaller.Install(_vm);
         {
 
             // 这是选择收藏夹旁边那个图标按钮
@@ -38,18 +41,21 @@ public partial class PageDownloadCompFavorites
             // 还有一个很扯淡的点，同样自定义的 MyButton 能在 XAML 直接设置 Click 事件
             // 到 MyIconButton 就不行了，死活跑不了，也不知道是不是漏了什么依赖属性没写
             Btn_ManageTargetFav.SvgIcon = "lucide/settings";
-            Btn_ManageTargetFav.Click += Manage_Click;
         }
         // Handles
-        Load.StateChanged += Load_State;
-        Btn_FavoritesCancel.Click += Btn_FavoritesCancel_Clicked;
-        Btn_SelectCancel.Click += Btn_SelectCancel_Clicked;
-        Btn_FavoritesShare.Click += Btn_FavoritesShare_Clicked;
-        Btn_FavoritesDownload.Click += Btn_FavoritesDownload_Clicked;
-        ComboTargetFav.SelectionChanged += ComboTargetFav_Selected;
-        HintGetFail.MouseLeftButtonDown += HintGetFail_MouseLeftButtonDown;
-        PanSearchBox.TextChanged += SearchRun;
+        WeakLanguageChanged.Add(this, OnLanguageChanged);
     }
+
+    public void OnNavigatedTo(object? parameter)
+    {
+        RefreshOnNavigate();
+    }
+
+    public void OnNavigatedFrom()
+    {
+    }
+
+    private static void OnLanguageChanged(PageDownloadCompFavorites page) => Common.RunInUi(page._RefreshCategoryTitles);
 
     private Comp.CompFavorites.FavData CurrentFavTarget
     {
@@ -80,18 +86,17 @@ public partial class PageDownloadCompFavorites
 
     private void PageDownloadCompFavorites_Loaded(object sender, EventArgs e)
     {
+        RefreshOnNavigate();
+    }
+
+    private void RefreshOnNavigate()
+    {
+        if (_refreshed)
+            return;
+        _refreshed = true;
         Items_SetSelectAll(false);
         RefreshBar();
         if (loader.input is not null && !loader.input.Count.Equals(CurrentFavTarget.Favs.Count)) RefreshFavTargets();
-    }
-
-    protected override void RefreshLocalization()
-    {
-        if (loader is not { State: Common.LoadState.Finished, output: not null })
-            return;
-        var savedOffset = PanBack.VerticalOffset;
-        Load_OnFinish(true);
-        Dispatcher.BeginInvoke(new Action(() => PanBack.ScrollToVerticalOffset(savedOffset)));
     }
 
     private List<string> LoaderInput()
@@ -122,6 +127,7 @@ public partial class PageDownloadCompFavorites
     {
         public MyCard Card { get; set; }
         public StackPanel ContentList { get; set; }
+        public string Title { get; set; }
         public int CompType { get; set; }
     }
 
@@ -143,7 +149,7 @@ public partial class PageDownloadCompFavorites
             ComboTargetFav.Items.Add(item);
         }
 
-        if (ComboTargetFav.SelectedIndex == -1) ComboTargetFav.SelectedIndex = 0; // 默认选择第一个
+        if (_vm.FavTargetSelectedIndex == -1) _vm.FavTargetSelectedIndex = 0; // 默认选择第一个
     }
 
     /// <summary>
@@ -169,7 +175,9 @@ public partial class PageDownloadCompFavorites
             },
             CompType = type
         };
+        newItem.Title = PageDownloadCompFavoritesViewModel.GetCategoryTitleFormat(type);
 
+        newItem.Card.Title = string.Format(newItem.Title, 0);
         newItem.Card.Children.Add(newItem.ContentList);
         itemList.Add(newItem);
         return newItem;
@@ -192,37 +200,22 @@ public partial class PageDownloadCompFavorites
         }
     }
 
-    private static string _GetCategoryTitle(int type, int count)
+    private void _RefreshCategoryTitles()
     {
-        return type switch
-        {
-            -1 => Lang.Text("Download.Comp.Favorites.SearchResults.Title", count),
-            (int)Comp.CompType.Mod => Lang.Text("Download.Comp.Favorites.Category.Mod", count),
-            (int)Comp.CompType.ModPack => $"{Lang.Text("Download.Comp.Type.Modpack")} ({count})",
-            (int)Comp.CompType.ResourcePack =>
-                $"{Lang.Text("Download.Comp.Type.ResourcePack")} ({count})",
-            (int)Comp.CompType.Shader => $"{Lang.Text("Download.Comp.Type.Shader")} ({count})",
-            (int)Comp.CompType.DataPack =>
-                $"{Lang.Text("Download.Comp.Type.DataPack")} ({count})",
-            (int)Comp.CompType.Plugin => $"{Lang.Text("Download.Comp.Type.Plugin")} ({count})",
-            (int)Comp.CompType.World => $"{Lang.Text("Download.Comp.Type.World")} ({count})",
-            _ => $"{Lang.Text("Download.Comp.Favorites.UnknownType")} ({count})"
-        };
+        foreach (var item in itemList)
+            item.Title = PageDownloadCompFavoritesViewModel.GetCategoryTitleFormat(item.CompType);
+        RefreshCardTitle();
     }
 
     private void RefreshCardTitle()
     {
         foreach (var item in itemList)
-        {
-            var type = item.CompType;
-            var count = type == -1
-                ? searchResult.Count
-                : compItemList.Count(e => (int)((Comp.CompProject)e.Tag).Type == type);
-            LocalizedText.Bind(
-                item.Card,
-                MyCard.TitleProperty,
-                () => _GetCategoryTitle(type, count));
-        }
+            item.Card.Title = string.Format(item.Title,
+                compItemList.Where(e => (int)((Comp.CompProject)e.Tag).Type == item.CompType).Count());
+        if (!itemList.Any(e => e.CompType.Equals(-1)))
+            return;
+        var searchItem = itemList.First(e => e.CompType.Equals(-1));
+        if (searchItem is not null) searchItem.Card.Title = string.Format(searchItem.Title, searchResult.Count);
     }
 
     #endregion
@@ -230,20 +223,13 @@ public partial class PageDownloadCompFavorites
     #region UI 化 - 加载主逻辑
 
     // 结果 UI 化
-    /// <summary>
-    ///     将加载结果渲染为界面。
-    /// </summary>
-    /// <param name="preserveSearch">
-    ///     是否保留搜索框内容。语言刷新时保留，普通加载（例如切换收藏夹）时清空。
-    /// </param>
-    private void Load_OnFinish(bool preserveSearch = false)
+    private void Load_OnFinish()
     {
-        var searchText = preserveSearch ? PanSearchBox.Text : string.Empty;
         itemList.Clear();
         try
         {
             allowSearch = false;
-            PanSearchBox.Text = string.Empty;
+            _vm.SearchText = string.Empty;
             allowSearch = true;
             compItemList.Clear();
             var someGetFail = loader.input.Count != loader.output.Count;
@@ -273,8 +259,6 @@ public partial class PageDownloadCompFavorites
 
             RefreshContent();
             RefreshCardTitle();
-            if (!string.IsNullOrEmpty(searchText))
-                PanSearchBox.Text = searchText;
         }
         catch (Exception ex)
         {
@@ -300,7 +284,7 @@ public partial class PageDownloadCompFavorites
         // 修改备注按钮
         var btn_EditNote = new MyIconButton();
         btn_EditNote.SvgIcon = "lucide/pencil";
-        btn_EditNote.TrySetLocalizedValue("ToolTip", "Download.Comp.Favorites.EditNote");
+        btn_EditNote.ToolTip = Lang.Text("Download.Comp.Favorites.EditNote");
         ToolTipService.SetPlacement(btn_EditNote, PlacementMode.Center);
         ToolTipService.SetVerticalOffset(btn_EditNote, 30d);
         ToolTipService.SetHorizontalOffset(btn_EditNote, 2d);
@@ -311,7 +295,12 @@ public partial class PageDownloadCompFavorites
             try
             {
                 CurrentFavTarget.Notes.TryGetValue(compId, out notes);
-                var desiredNote = await Launcher.MyMsgBoxInputAsync(Lang.Text("Download.Comp.Favorites.EditNote"), defaultInput: notes);
+                var desiredNoteResult = await _vm.Dialog.ShowAsync(new InputDialogRequest
+                {
+                    Title = Lang.Text("Download.Comp.Favorites.EditNote"),
+                    DefaultValue = notes ?? ""
+                });
+                var desiredNote = desiredNoteResult.IsConfirmed ? desiredNoteResult.InputText : null;
                 if (desiredNote is not null)
                 {
                     CurrentFavTarget.Notes[compId] = desiredNote;
@@ -335,11 +324,9 @@ public partial class PageDownloadCompFavorites
         // 删除按钮
         var btn_Delete = new MyIconButton
         {
-            SvgIcon = "lucide/heart-filled"
+            SvgIcon = "lucide/heart-filled",
+            ToolTip = Lang.Text("Download.Comp.Favorites.Action.Unfavorite")
         };
-        btn_Delete.TrySetLocalizedValue(
-            "ToolTip",
-            "Download.Comp.Favorites.Action.Unfavorite");
         ToolTipService.SetPlacement(btn_Delete, PlacementMode.Center);
         ToolTipService.SetVerticalOffset(btn_Delete, 30d);
         ToolTipService.SetHorizontalOffset(btn_Delete, 2d);
@@ -376,16 +363,11 @@ public partial class PageDownloadCompFavorites
         var newCount = selectedItemList.Count;
         var selected = newCount > 0;
         if (selected)
-            LocalizedText.TryBind(
-                LabSelect,
-                "Text",
-                () => Lang.Text(
-                    "Download.Comp.Favorites.Hint.SelectedCount",
-                    newCount));
+            _vm.SelectedText = Lang.Text("Download.Comp.Favorites.Hint.SelectedCount", newCount); // 取消所有选择时不更新数字
         // 更新显示状态
         if (!Animations.AniExitsAnyControl())
         {
-            PanContentList.Margin = new Thickness(0d, 0d, 0d, selected ? 80 : 0);
+            _vm.ContentListMargin = new Thickness(0d, 0d, 0d, selected ? 80 : 0);
             if (selected)
             {
                 // 仅在数量增加时播放出现/跳跃动画
@@ -471,7 +453,7 @@ public partial class PageDownloadCompFavorites
                 var errorMessage = "";
                 if (loader.Error is not null)
                     errorMessage = loader.Error.Message;
-                if (loader.Error is InvalidJsonException)
+                if (errorMessage.Contains(Lang.Text("Common.Error.InvalidJson")))
                 {
                     Common.Log("[Download] 下载的工程列表 JSON 文件损坏，已自动重试", Common.LogLevel.Debug);
                     PageLoaderRestart();
@@ -525,16 +507,16 @@ public partial class PageDownloadCompFavorites
 
     private async void Btn_FavoritesDownload_Clicked(object sender, Common.RouteEventArgs e)
     {
-        var ctl = sender as Control;
-        if (ctl is not null) ctl.IsEnabled = false;
+        _vm.IsBulkDownloadEnabled = false;
         try
         {
-            if (1 != await Launcher.MyMsgBoxAsync(
-                    Lang.Text("Download.Comp.Favorites.Dialog.BulkDownload.Content"),
-                    Lang.Text("Download.Comp.Favorites.Dialog.BulkDownload.Title"),
-                    Lang.Text("Common.Action.Continue"),
-                    Lang.Text("Common.Action.Cancel"), isWarn: true
-                )) return;
+            if (!(await _vm.Dialog.ShowAsync(new TextDialogRequest
+            {
+                Title = Lang.Text("Download.Comp.Favorites.Dialog.BulkDownload.Title"),
+                Content = Lang.Text("Download.Comp.Favorites.Dialog.BulkDownload.Content"),
+                Buttons = DialogButtons.ContinueCancel,
+                IsWarn = true
+            })).IsConfirmed) return;
             var supportedModLoader = new List<Comp.CompLoaderType>();
             var loaderFirstSet = true;
             var hasMod = false;
@@ -559,7 +541,7 @@ public partial class PageDownloadCompFavorites
             // 检查是否有共同支持的 Loading
             if (hasMod && supportedModLoader.Count == 0)
             {
-                HintService.Hint(Lang.Text("Download.Comp.Favorites.Hint.SelectLoader"), HintType.Error);
+                HintService.Show(Hints.Error(Lang.Text("Download.Comp.Favorites.Hint.SelectLoader")));
                 return;
             }
 
@@ -568,16 +550,23 @@ public partial class PageDownloadCompFavorites
             if (hasMod && supportedModLoader.Count > 0)
                 if (supportedModLoader.Count > 0)
                 {
-                    var mSelection = new List<IMyRadio>();
-                    foreach (var i in supportedModLoader)
-                        mSelection.Add(new MyRadioBox { Text = i.ToString() });
-                    var selectedModLoaderStr = await Launcher.MyMsgBoxSelectAsync(mSelection, Lang.Text("Download.Comp.Favorites.Dialog.SelectLoader.Title"), button2: Lang.Text("Common.Action.Cancel"));
+                    var selections = supportedModLoader.Select(i => i.ToString()).ToList();
+                    var selectedModLoaderDialog = await _vm.Dialog.ShowAsync(new SelectDialogRequest
+                    {
+                        Title = Lang.Text("Download.Comp.Favorites.Dialog.SelectLoader.Title"),
+                        Options = selections.Select(x => new DialogOption { Text = x }).ToList(),
+                        Buttons = DialogButtons.OkCancel,
+                        HighLight = false
+                    });
+                    var selectedModLoaderStr = selectedModLoaderDialog.IsConfirmed
+                        ? selectedModLoaderDialog.SelectedIndex
+                        : null;
                     if (selectedModLoaderStr is null)
                         return;
                     desiredModLoader = supportedModLoader[(int)selectedModLoaderStr];
                 }
 
-            HintService.Hint(Lang.Text("Download.Comp.Favorites.Hint.LoadingVersions"));
+            HintService.Show(Hints.Info(Lang.Text("Download.Comp.Favorites.Hint.LoadingVersions")));
             // 输入 Ids，输出合适版本
             var getInfoAndDownloadLoader = new List<Loading.LoaderBase>();
             getInfoAndDownloadLoader.Add(new Loading.LoaderTask<List<string>, List<DownloadFile>>(
@@ -637,7 +626,7 @@ public partial class PageDownloadCompFavorites
                     // Log(SuitVersion.Join(","))
                     if (suitVersion.Count == 0)
                     {
-                        HintService.Hint(Lang.Text("Download.Comp.Favorites.Hint.NoResource"), HintType.Error);
+                        HintService.Show(Hints.Error(Lang.Text("Download.Comp.Favorites.Hint.NoResource")));
                         ts.Abort();
                         return;
                     }
@@ -649,14 +638,19 @@ public partial class PageDownloadCompFavorites
                 {
                     List<IMyRadio> selection = [];
                     foreach (var i in suitVersion)
-                        selection.Add(new MyRadioBox { Text = Comp.FormatGameVersion(i) });
-                    selectedVersion = Launcher.MyMsgBoxSelect(selection, Lang.Text("Download.Comp.Favorites.Dialog.SelectVersion.Title"), button2: Lang.Text("Common.Action.Cancel"));
+                        selection.Add(new MyRadioBox { Text = i });
+                    selectedVersion = _vm.Dialog.Show(new SelectDialogRequest
+                    {
+                        Title = Lang.Text("Download.Comp.Favorites.Dialog.SelectVersion.Title"),
+                        Options = DialogOptions.From(selection),
+                        Buttons = DialogButtons.OkCancel,
+                        HighLight = false,
+                        ForceWait = true
+                    }).Result?.SelectedIndex;
                     if (selectedVersion is null) ts.Abort();
                 });
                 string selectedVersionStr = suitVersion[(int)selectedVersion];
-                HintService.Hint(Lang.Text(
-                    "Download.Comp.Favorites.Hint.SelectSaveLocation",
-                    Comp.FormatGameVersion(selectedVersionStr)));
+                HintService.Show(Hints.Info(Lang.Text("Download.Comp.Favorites.Hint.SelectSaveLocation", selectedVersionStr)));
                 var saveFolder = SystemDialogs.SelectFolder();
                 if (string.IsNullOrWhiteSpace(saveFolder))
                 {
@@ -670,15 +664,13 @@ public partial class PageDownloadCompFavorites
                 foreach (var Target in allFiles)
                 {
                     // 按照发布日期排序
-                    var finalChoices = Target
-                        .Where(i => Comp.ContainsGameVersion(i.GameVersions, selectedVersionStr))
-                        .ToList();
+                    var finalChoices = Target.Where(i => i.GameVersions.Contains(selectedVersionStr)).ToList();
                     finalChoices.Sort((a, b) => a.ReleaseDate > b.ReleaseDate);
                     // 获取文件名
                     var targetProject = Comp.compProjectCache[finalChoices.First().ProjectId];
                     var fileName = Comp.CompFileNameGet(targetProject, finalChoices.First());
                     // 选择最新版本进行下载
-                    res.Add(finalChoices.First().ToNetFile(Path.Combine(saveFolder, fileName)));
+                    res.Add(finalChoices.First().ToNetFile(System.IO.Path.Combine(saveFolder, fileName)));
                 }
 
                 ts.output = res;
@@ -720,7 +712,7 @@ public partial class PageDownloadCompFavorites
         }
         finally
         {
-            if (ctl is not null) ctl.IsEnabled = true;
+            _vm.IsBulkDownloadEnabled = true;
         }
     }
 
@@ -766,6 +758,7 @@ public partial class PageDownloadCompFavorites
         var body = new ContextMenu();
         var newItem = new MyMenuItem
         {
+            Header = Lang.Text("Download.Comp.Favorites.Menu.Share"),
             SvgIcon = "lucide/share-2"
         };
         newItem.Click += (_, _) =>
@@ -789,10 +782,10 @@ public partial class PageDownloadCompFavorites
                     userSummary: Lang.Text("Download.Comp.Favorites.Error.OperationFailed"));
             }
         };
-        newItem.TrySetLocalizedValue("Header", "Download.Comp.Favorites.Menu.Share");
         body.Items.Add(newItem);
         newItem = new MyMenuItem
         {
+            Header = Lang.Text("Download.Comp.Favorites.Menu.Import"),
             SvgIcon = "lucide/circle-plus"
         };
         newItem.Click += async (sender, _) =>
@@ -801,26 +794,46 @@ public partial class PageDownloadCompFavorites
             if (ctl is not null) ctl.IsEnabled = false;
             try
             {
-                var clipData = await Launcher.MyMsgBoxInputAsync(Lang.Text("Download.Comp.Favorites.Dialog.Import.Input"), hintText: Lang.Text("Download.Comp.Favorites.Dialog.Import.Hint"));
+                var clipDataDialog = await _vm.Dialog.ShowAsync(new InputDialogRequest
+                {
+                    Title = Lang.Text("Download.Comp.Favorites.Dialog.Import.Input"),
+                    Content = "",
+                    HintText = Lang.Text("Download.Comp.Favorites.Dialog.Import.Hint"),
+                    HighLight = false
+                });
+                var clipData = clipDataDialog.IsConfirmed ? clipDataDialog.InputText : null;
                 if (string.IsNullOrWhiteSpace(clipData)) return;
                 var newFavs = Comp.CompFavorites.GetIdsByShareCode(clipData);
                 if (newFavs.Count == 0)
                 {
-                    HintService.Hint(Lang.Text("Download.Comp.Favorites.Hint.NothingShared"));
+                    HintService.Show(Hints.Info(Lang.Text("Download.Comp.Favorites.Hint.NothingShared")));
                     return;
                 }
 
-                var userWant = await Launcher.MyMsgBoxAsync(Lang.Text("Download.Comp.Favorites.Dialog.Import.Type"), button1: Lang.Text("Download.Comp.Favorites.Dialog.Import.NewFolder"), button2: Lang.Text("Download.Comp.Favorites.Dialog.Import.CurrentFolder"));
+                var userWant = (await _vm.Dialog.ShowAsync(new TextDialogRequest
+                {
+                    Title = Lang.Text("Common.Dialog.Title"),
+                    Content = Lang.Text("Download.Comp.Favorites.Dialog.Import.Type"),
+                    Buttons = DialogButtons.From(
+                        DialogButton.Create(Lang.Text("Download.Comp.Favorites.Dialog.Import.NewFolder")),
+                        DialogButton.Create(Lang.Text("Download.Comp.Favorites.Dialog.Import.CurrentFolder")))
+                })).Button;
                 switch (userWant)
                 {
                     case 1:
                     {
-                        var newFavName = await Launcher.MyMsgBoxInputAsync(Lang.Text("Download.Comp.Favorites.Dialog.Import.New"), Lang.Text("Download.Comp.Favorites.Dialog.NewPrompt"));
+                        var newFavNameDialog = await _vm.Dialog.ShowAsync(new InputDialogRequest
+                        {
+                            Title = Lang.Text("Download.Comp.Favorites.Dialog.Import.New"),
+                            Content = Lang.Text("Download.Comp.Favorites.Dialog.NewPrompt"),
+                            HighLight = false
+                        });
+                        var newFavName = newFavNameDialog.IsConfirmed ? newFavNameDialog.InputText : null;
                         if (string.IsNullOrWhiteSpace(newFavName)) return;
                         Comp.CompFavorites.FavoritesList.Add(Comp.CompFavorites.GetNewFav(newFavName, newFavs));
                         Comp.CompFavorites.Save();
                         RefreshFavTargets();
-                        ComboTargetFav.SelectedIndex = ComboTargetFav.Items.Count - 1;
+                        _vm.FavTargetSelectedIndex = ComboTargetFav.Items.Count - 1;
                         break;
                     }
                     case 2:
@@ -845,10 +858,10 @@ public partial class PageDownloadCompFavorites
                 if (ctl is not null) ctl.IsEnabled = true;
             }
         };
-        newItem.TrySetLocalizedValue("Header", "Download.Comp.Favorites.Menu.Import");
         body.Items.Add(newItem);
         newItem = new MyMenuItem
         {
+            Header = Lang.Text("Download.Comp.Favorites.Menu.New"),
             SvgIcon = "lucide/folder-plus"
         };
         newItem.Click += async (sender, _) =>
@@ -857,13 +870,19 @@ public partial class PageDownloadCompFavorites
             if (ctl is not null) ctl.IsEnabled = false;
             try
             {
-                var newFavName = await Launcher.MyMsgBoxInputAsync(Lang.Text("Download.Comp.Favorites.Menu.New"), Lang.Text("Download.Comp.Favorites.Dialog.NewPrompt"));
+                var newFavNameDialog = await _vm.Dialog.ShowAsync(new InputDialogRequest
+                {
+                    Title = Lang.Text("Download.Comp.Favorites.Menu.New"),
+                    Content = Lang.Text("Download.Comp.Favorites.Dialog.NewPrompt"),
+                    HighLight = false
+                });
+                var newFavName = newFavNameDialog.IsConfirmed ? newFavNameDialog.InputText : null;
                 if (string.IsNullOrWhiteSpace(newFavName))
                     return;
                 Comp.CompFavorites.FavoritesList.Add(Comp.CompFavorites.GetNewFav(newFavName, null));
                 Comp.CompFavorites.Save();
                 RefreshFavTargets();
-                ComboTargetFav.SelectedIndex = ComboTargetFav.Items.Count - 1;
+                _vm.FavTargetSelectedIndex = ComboTargetFav.Items.Count - 1;
             }
             catch (Exception ex)
             {
@@ -878,10 +897,10 @@ public partial class PageDownloadCompFavorites
                 if (ctl is not null) ctl.IsEnabled = true;
             }
         };
-        newItem.TrySetLocalizedValue("Header", "Download.Comp.Favorites.Menu.New");
         body.Items.Add(newItem);
         newItem = new MyMenuItem
         {
+            Header = Lang.Text("Download.Comp.Favorites.Menu.Rename"),
             SvgIcon = "lucide/pencil"
         };
         newItem.Click += async (sender, _) =>
@@ -890,7 +909,14 @@ public partial class PageDownloadCompFavorites
             if (ctl is not null) ctl.IsEnabled = false;
             try
             {
-                var newName = await Launcher.MyMsgBoxInputAsync(Lang.Text("Download.Comp.Favorites.Dialog.Rename.Title"), defaultInput: CurrentFavTarget.Name);
+                var newNameDialog = await _vm.Dialog.ShowAsync(new InputDialogRequest
+                {
+                    Title = Lang.Text("Download.Comp.Favorites.Dialog.Rename.Title"),
+                    Content = "",
+                    DefaultValue = CurrentFavTarget.Name,
+                    HighLight = false
+                });
+                var newName = newNameDialog.IsConfirmed ? newNameDialog.InputText : null;
                 if (string.IsNullOrWhiteSpace(newName) || (CurrentFavTarget.Name ?? "") == (newName ?? ""))
                     return;
                 CurrentFavTarget.Name = newName;
@@ -910,10 +936,10 @@ public partial class PageDownloadCompFavorites
                 if (ctl is not null) ctl.IsEnabled = true;
             }
         };
-        newItem.TrySetLocalizedValue("Header", "Download.Comp.Favorites.Menu.Rename");
         body.Items.Add(newItem);
         newItem = new MyMenuItem
         {
+            Header = Lang.Text("Download.Comp.Favorites.Menu.Delete"),
             SvgIcon = "lucide/trash-2"
         };
         newItem.Click += async (sender, _) =>
@@ -924,19 +950,28 @@ public partial class PageDownloadCompFavorites
             {
                 if (Comp.CompFavorites.FavoritesList.Count == 1)
                 {
-                    HintService.Hint(Lang.Text("Download.Comp.Favorites.Hint.LastCollection"));
+                    HintService.Show(Hints.Info(Lang.Text("Download.Comp.Favorites.Hint.LastCollection")));
                     return;
                 }
 
                 var content = Lang.Text("Download.Comp.Favorites.Dialog.Delete.Confirm", CurrentFavTarget.Name, CurrentFavTarget.Favs.Count, CurrentFavTarget.Id);
-                var res = await Launcher.MyMsgBoxAsync(content, Lang.Text("Download.Comp.Favorites.Dialog.Delete.Title"), isWarn: true, button1: Lang.Text("Common.Option.No"), button2: Lang.Text("Common.Option.Yes"), button3: Lang.Text("Common.Option.No"));
+                var res = (await _vm.Dialog.ShowAsync(new TextDialogRequest
+                {
+                    Title = Lang.Text("Download.Comp.Favorites.Dialog.Delete.Title"),
+                    Content = content,
+                    Buttons = DialogButtons.From(
+                        DialogButton.Create(Lang.Text("Common.Option.No")),
+                        DialogButton.Create(Lang.Text("Common.Option.Yes")),
+                        DialogButton.Create(Lang.Text("Common.Option.No"))),
+                    IsWarn = true
+                })).Button;
                 if (res == 2)
                 {
                     Comp.CompFavorites.FavoritesList.Remove(CurrentFavTarget);
                     Comp.CompFavorites.Save();
-                    HintService.Hint(Lang.Text("Download.Comp.Favorites.Hint.Deleted"), HintType.Success);
+                    HintService.Show(Hints.Success(Lang.Text("Download.Comp.Favorites.Hint.Deleted")));
                     RefreshFavTargets();
-                    ComboTargetFav.SelectedIndex = 0;
+                    _vm.FavTargetSelectedIndex = 0;
                 }
             }
             catch (Exception ex)
@@ -952,7 +987,6 @@ public partial class PageDownloadCompFavorites
                 if (ctl is not null) ctl.IsEnabled = true;
             }
         };
-        newItem.TrySetLocalizedValue("Header", "Download.Comp.Favorites.Menu.Delete");
         body.Items.Add(newItem);
         body.PlacementTarget = (UIElement)sender;
         body.Placement = PlacementMode.Bottom;
@@ -973,21 +1007,30 @@ public partial class PageDownloadCompFavorites
         var failIds = loader.input.Except(loader.output.Select(i => i.Id).ToList()).ToList();
         foreach (var Id in failIds)
             content += $" - {Id}" + "\r\n";
-        Launcher.MyMsgBox(content, Lang.Text("Download.Comp.Favorites.Dialog.GetFailed.Title"), button2: Lang.Text("Download.Comp.Favorites.Dialog.GetFailed.CopyIds"), button3: Lang.Text("Download.Comp.Favorites.Dialog.GetFailed.Remove"),
-            button2Action: () => Common.ClipboardSet(failIds.Join("\r\n")), button3Action: () =>
-            {
-                foreach (var Id in failIds)
-                    CurrentFavTarget.Favs.Remove(Id);
-                Comp.CompFavorites.Save();
-                HintService.Hint(Lang.Text("Download.Comp.Favorites.Hint.Removed"), HintType.Success);
-            });
+        _ = _vm.Dialog.ShowAsync(new TextDialogRequest
+        {
+            Title = Lang.Text("Download.Comp.Favorites.Dialog.GetFailed.Title"),
+            Content = content,
+            Buttons = DialogButtons.From(
+                DialogButton.Create(Lang.Text("Common.Action.Confirm")),
+                DialogButton.Create(Lang.Text("Download.Comp.Favorites.Dialog.GetFailed.CopyIds"),
+                    () => Common.ClipboardSet(failIds.Join("\r\n"))),
+                DialogButton.Create(Lang.Text("Download.Comp.Favorites.Dialog.GetFailed.Remove"), () =>
+                {
+                    foreach (var Id in failIds)
+                        CurrentFavTarget.Favs.Remove(Id);
+                    Comp.CompFavorites.Save();
+                    HintService.Show(Hints.Success(Lang.Text("Download.Comp.Favorites.Hint.Removed")));
+                })),
+            ForceWait = true
+        });
     }
 
     #endregion
 
     #region 搜索
 
-    private bool IsSearching => !string.IsNullOrWhiteSpace(PanSearchBox.Text);
+    private bool IsSearching => !string.IsNullOrWhiteSpace(_vm.SearchText);
 
     private bool allowSearch = true;
     private List<MyListItem> searchResult = new();
@@ -1011,14 +1054,12 @@ public partial class PageDownloadCompFavorites
                     searchSource.Add(new Common.SearchSource(entry.Description, 0.4d));
                 if ((entry.TranslatedName ?? "") != (entry.RawName ?? ""))
                     searchSource.Add(new Common.SearchSource(entry.TranslatedName, 1d));
-                searchSource.Add(new Common.SearchSource(
-                    string.Join("", Comp.GetLocalizedTags(entry.Tags)),
-                    0.2d));
+                searchSource.Add(new Common.SearchSource(string.Join("", entry.Tags), 0.2d));
                 queryList.Add(new Common.SearchEntry<MyListItem> { item = Item, searchSource = searchSource });
             }
 
             // 进行搜索
-            searchResult = Common.Search(queryList, PanSearchBox.Text, Common.MaxLocalSearchDepth, 0.35d).Select(r => r.item).ToList();
+            searchResult = Common.Search(queryList, _vm.SearchText, Common.MaxLocalSearchDepth, 0.35d).Select(r => r.item).ToList();
         }
 
         RefreshContent();

@@ -1,6 +1,7 @@
 ﻿using System.IO;
 using System.Text;
 using PCL.Core.App.Localization;
+using PCL.Core.UI.Hints;
 using PCL.Core.UI;
 using PCL.Network;
 using PCL.Network.Loaders;
@@ -29,9 +30,7 @@ public static partial class DownloadUi
                 .Any(ongoingLoader =>
                     ongoingLoader.Identifier == DownloadIdentifier("FabricInstaller", version)))
             {
-                HintService.Hint(
-                    Lang.Text("Minecraft.Download.Error.InstanceDownloading"),
-                    HintType.Error);
+                HintService.Show(Hints.Error(Lang.Text("Minecraft.Download.Error.InstanceDownloading")));
                 return;
             }
 

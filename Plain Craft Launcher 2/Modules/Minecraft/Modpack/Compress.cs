@@ -2,7 +2,9 @@
 using System.IO.Compression;
 using System.Text.RegularExpressions;
 using PCL.Core.App.Localization;
+using PCL.Core.UI.Hints;
 using PCL.Core.UI;
+using PCL.Core.UI.Dialogs;
 using static PCL.Loading;
 
 namespace PCL;
@@ -46,28 +48,27 @@ public static partial class Modpack
 
     private static string _SelectCompressTargetFolder()
     {
-        Launcher.MyMsgBox(
-            Lang.Text("Minecraft.Download.Modpack.SelectEmptyFolder.Message"),
-            Lang.Text("Common.Action.Install"),
-            Lang.Text("Common.Action.Continue"),
-            forceWait: true);
+        _ = DialogService.Instance.ShowAsync(new TextDialogRequest
+        {
+            Title = Lang.Text("Common.Action.Install"),
+            Content = Lang.Text("Minecraft.Download.Modpack.SelectEmptyFolder.Message"),
+            Buttons = DialogButtons.From(
+                DialogButton.Create(Lang.Text("Common.Action.Continue"))),
+            ForceWait = true
+        });
         var targetFolder = SystemDialogs.SelectFolder(
             Lang.Text("Minecraft.Download.Modpack.SelectTargetFolder.Title"));
         if (string.IsNullOrEmpty(targetFolder))
             throw new Common.CancelledException();
         if (targetFolder.Contains('!') || targetFolder.Contains(';'))
         {
-            HintService.Hint(
-                Lang.Text("Minecraft.Download.Modpack.InvalidGamePathChars", targetFolder),
-                HintType.Error);
+            HintService.Show(Hints.Error(Lang.Text("Minecraft.Download.Modpack.InvalidGamePathChars", targetFolder)));
             throw new Common.CancelledException();
         }
 
         if (Directory.GetFileSystemEntries(targetFolder).Length > 0)
         {
-            HintService.Hint(
-                Lang.Text("Minecraft.Download.Modpack.TargetFolderMustBeEmpty"),
-                HintType.Error);
+            HintService.Show(Hints.Error(Lang.Text("Minecraft.Download.Modpack.TargetFolderMustBeEmpty")));
             throw new Common.CancelledException();
         }
 

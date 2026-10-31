@@ -1,12 +1,12 @@
 ﻿<local:MyPageRight
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:local="clr-namespace:PCL" xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="clr-namespace:PCL"
+                   xmlns:loc="https://ce.pclc.cc/core/localization" xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d" x:Class="PCL.PageInstanceScreenshot"
-    PanScroll="{Binding ElementName=PanBack}" Grid.IsSharedSizeScope="True"
-    xmlns:loc="https://ce.pclc.cc/core/localization">
-    <local:MyScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" x:Name="PanBack">
+    PanScroll="{Binding ElementName=PanBack}" Grid.IsSharedSizeScope="True">
+    <local:MyScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" x:Name="PanBack" ScrollChanged="RequireAppend">
         <Grid>
             <local:MyCard HorizontalAlignment="Center" VerticalAlignment="Center" Margin="40" x:Name="PanNoPic"
                           Visibility="{Binding ShowContent, Converter={StaticResource InverseBooleanToVisibilityConverter}}">
@@ -32,7 +32,7 @@
                     <TextBlock Grid.Row="2" Grid.ColumnSpan="4" Margin="10,15,10,5"
                                Text="{loc:Loc Instance.Screenshot.Empty.Message}" TextWrapping="Wrap" />
                     <local:MyButton Grid.Row="3" Grid.Column="1" Height="35" HorizontalAlignment="Center"
-                                    x:Name="BtnOpenFolderTop" MinWidth="140"
+                                    x:Name="BtnOpenFolderTop" MinWidth="140" Command="{Binding OpenFolderCommand}"
                                     Text="{loc:Loc Instance.Screenshot.OpenFolder}" Margin="10,10,10,0"
                                     Padding="13,0" ColorType="Highlight" />
                 </Grid>
@@ -48,7 +48,7 @@
                         <local:MyButton Grid.Column="0" MinWidth="140"
                                         Text="{loc:Loc Instance.Screenshot.OpenFolder}" Padding="13,0"
                                         Margin="0,0,20,0"
-                                        HorizontalAlignment="Left" x:Name="BtnOpenFolder" ColorType="Highlight" />
+                                        HorizontalAlignment="Left" x:Name="BtnOpenFolder" ColorType="Highlight" Command="{Binding OpenFolderCommand}" />
                     </Grid>
                 </local:MyCard>
                 <WrapPanel Margin="8,0,8,25" Name="PanList" HorizontalAlignment="Center" Orientation="Horizontal">

@@ -1,8 +1,10 @@
 ﻿using System.Diagnostics;
 using PCL.Core.App;
 using PCL.Core.App.Localization;
+using PCL.Core.UI.Hints;
 using PCL.Core.Minecraft.Profile;
 using PCL.Core.Minecraft.Profile.Models;
+using PCL.Core.UI.Dialogs;
 using PCL.Core.Utils;
 
 namespace PCL;
@@ -59,12 +61,16 @@ public static partial class GameLaunch
             || instance.PathInstance.IsAscii())
             return;
 
-        var userChoice = Launcher.MyMsgBox(
-            Lang.Text("Minecraft.Launch.Precheck.NonAsciiPath.Message", instance.Name),
-            Lang.Text("Minecraft.Launch.Precheck.NonAsciiPath.Title"),
-            Lang.Text("Minecraft.Launch.Precheck.NonAsciiPath.Continue"),
-            Lang.Text("Minecraft.Launch.Precheck.NonAsciiPath.Back"),
-            Lang.Text("Common.Hint.DoNotShowAgain"));
+        var userChoice = DialogService.Instance.Show(new TextDialogRequest
+        {
+            Title = Lang.Text("Minecraft.Launch.Precheck.NonAsciiPath.Title"),
+            Content = Lang.Text("Minecraft.Launch.Precheck.NonAsciiPath.Message", instance.Name),
+            Buttons = DialogButtons.From(
+                DialogButton.Create(Lang.Text("Minecraft.Launch.Precheck.NonAsciiPath.Continue")),
+                DialogButton.Create(Lang.Text("Minecraft.Launch.Precheck.NonAsciiPath.Back")),
+                DialogButton.Create(Lang.Text("Common.Hint.DoNotShowAgain"))),
+            ForceWait = true
+        }).Result?.Button;
         States.Hint.NonAsciiGamePath = userChoice switch
         {
             2 => throw new Exception("$$"),
@@ -189,12 +195,15 @@ public static partial class GameLaunch
                 if (!DonateHintLaunchCounts.Contains(States.System.LaunchCount))
                     return;
 
-                if (Launcher.MyMsgBox(
-                        Lang.Text("Minecraft.Launch.Donate.Message", States.System.LaunchCount),
-                        Lang.Text("Minecraft.Launch.Donate.Title", States.System.LaunchCount),
-                        Lang.Text("Minecraft.Launch.Donate.Support"),
-                        Lang.Text("Minecraft.Launch.Donate.Decline")
-                    ) == 1)
+                if (DialogService.Instance.Show(new TextDialogRequest
+                    {
+                        Title = Lang.Text("Minecraft.Launch.Donate.Title", States.System.LaunchCount),
+                        Content = Lang.Text("Minecraft.Launch.Donate.Message", States.System.LaunchCount),
+                        Buttons = DialogButtons.From(
+                            DialogButton.Create(Lang.Text("Minecraft.Launch.Donate.Support")),
+                            DialogButton.Create(Lang.Text("Minecraft.Launch.Donate.Decline"))),
+                        ForceWait = true
+                    }).Result?.Button == 1)
                 {
                     Common.OpenWebsite("https://afdian.com/a/LTCat");
                 }
@@ -210,30 +219,37 @@ public static partial class GameLaunch
 
         if (Lang.IsFeaturesUnrestricted)
         {
-            if (Launcher.MyMsgBox(
-                    Lang.Text("Minecraft.Launch.PurchaseHint.Message"),
-                    Lang.Text("Minecraft.Launch.PurchaseHint.Title"),
-                    Lang.Text("Minecraft.Launch.PurchaseHint.Purchase"),
-                    Lang.Text("Minecraft.Launch.PurchaseHint.Later")
-                )
-                == 1)
+            if (DialogService.Instance.Show(new TextDialogRequest
+                {
+                    Title = Lang.Text("Minecraft.Launch.PurchaseHint.Title"),
+                    Content = Lang.Text("Minecraft.Launch.PurchaseHint.Message"),
+                    Buttons = DialogButtons.From(
+                        DialogButton.Create(Lang.Text("Minecraft.Launch.PurchaseHint.Purchase")),
+                        DialogButton.Create(Lang.Text("Minecraft.Launch.PurchaseHint.Later"))),
+                    ForceWait = true
+                }).Result
+                ?.Button == 1)
                 Common.OpenWebsite(
                     "https://www.xbox.com/zh-cn/games/store/minecraft-java-bedrock-edition-for-pc/9nxp44l49shj");
             return;
         }
 
-        switch (Launcher.MyMsgBox(
-                    Lang.Text("Minecraft.Launch.AccountVerification.Message"),
-                    Lang.Text("Minecraft.Launch.AccountVerification.Title"),
-                    Lang.Text("Minecraft.Launch.AccountVerification.Purchase"),
-                    Lang.Text("Minecraft.Launch.AccountVerification.Demo"),
-                    Lang.Text("Minecraft.Launch.AccountVerification.Back"),
-                    button1Action: () =>
-                        Common.OpenWebsite(
-                            "https://www.xbox.com/zh-cn/games/store/minecraft-java-bedrock-edition-for-pc/9nxp44l49shj")))
+        switch (DialogService.Instance.Show(new TextDialogRequest
+                {
+                    Title = Lang.Text("Minecraft.Launch.AccountVerification.Title"),
+                    Content = Lang.Text("Minecraft.Launch.AccountVerification.Message"),
+                    Buttons = DialogButtons.From(
+                        DialogButton.Create(Lang.Text("Minecraft.Launch.AccountVerification.Purchase"),
+                            () =>
+                                Common.OpenWebsite(
+                                    "https://www.xbox.com/zh-cn/games/store/minecraft-java-bedrock-edition-for-pc/9nxp44l49shj")),
+                        DialogButton.Create(Lang.Text("Minecraft.Launch.AccountVerification.Demo")),
+                        DialogButton.Create(Lang.Text("Minecraft.Launch.AccountVerification.Back"))),
+                    ForceWait = true
+                }).Result?.Button)
         {
             case 2:
-                HintService.Hint(Lang.Text("Minecraft.Launch.DemoMode"), HintType.Error);
+                HintService.Show(Hints.Error(Lang.Text("Minecraft.Launch.DemoMode")));
                 currentLaunchOptions!.ExtraArgs.Add("--demo");
                 break;
 
@@ -295,7 +311,7 @@ public static partial class GameLaunch
             throw new Exception("McLaunchStart 必须在 UI 线程调用！");
         if (mcLaunchLoader.State == Common.LoadState.Loading)
         {
-            HintService.Hint(Lang.Text("Minecraft.Launch.Error.AlreadyLaunching"), HintType.Error);
+            HintService.Show(Hints.Error(Lang.Text("Minecraft.Launch.Error.AlreadyLaunching")));
             isLaunching = false;
             return false;
         }
@@ -322,12 +338,10 @@ public static partial class GameLaunch
         currentLaunchOptions.instance.Load();
         if (currentLaunchOptions.instance.state == McInstanceState.Error)
         {
-            HintService.Hint(
-                Lang.Text(
+            HintService.Show(Hints.Error(Lang.Text(
                     "Minecraft.Launch.Error.CannotLaunch",
                     currentLaunchOptions.instance.Desc
-                ),
-                HintType.Error);
+                )));
             isLaunching = false;
             return false;
         }
@@ -427,9 +441,7 @@ public static partial class GameLaunch
         catch (Exception ex)
         {
             if (!ex.Message.StartsWithF("$$"))
-                HintService.Hint(
-                    Lang.Text("Minecraft.Launch.Precheck.Failed.WithDetail", ex.Message),
-                    HintType.Error);
+                HintService.Show(Hints.Error(Lang.Text("Minecraft.Launch.Precheck.Failed.WithDetail", ex.Message)));
             throw;
         }
     }
@@ -558,18 +570,16 @@ public static partial class GameLaunch
         switch (launchLoader.State)
         {
             case Common.LoadState.Finished:
-                HintService.Hint(
-                    Lang.Text("Minecraft.Launch.Success", InstanceList.McMcInstanceSelected!.Name),
-                    HintType.Success);
+                HintService.Show(Hints.Success(Lang.Text("Minecraft.Launch.Success", InstanceList.McMcInstanceSelected!.Name)));
                 break;
 
             case Common.LoadState.Aborted:
                 if (_abortHint is null)
-                    HintService.Hint(currentLaunchOptions?.SaveBatch is null
+                    HintService.Show(Hints.Info(currentLaunchOptions?.SaveBatch is null
                             ? Lang.Text("Minecraft.Launch.Cancelled")
-                            : Lang.Text("Minecraft.Launch.ExportScript.Cancelled"));
+                            : Lang.Text("Minecraft.Launch.ExportScript.Cancelled")));
                 else
-                    HintService.Hint(_abortHint, HintType.Success);
+                    HintService.Show(Hints.Success(_abortHint));
                 break;
 
             case Common.LoadState.Failed:
@@ -593,14 +603,18 @@ public static partial class GameLaunch
             if (currentEx.Message.StartsWithF("$"))
             {
                 if (currentEx.Message != "$$")
-                    Launcher.MyMsgBox(
-                        Lang.Text(
+                    DialogService.Instance.Show(new TextDialogRequest
+                    {
+                        Title = currentLaunchOptions?.SaveBatch is null
+                            ? Lang.Text("Launch.Error.Title")
+                            : Lang.Text("Launch.Error.ExportScriptTitle"),
+                        Content = Lang.Text(
                             "Minecraft.Launch.Error.SpecialMessage.WithDetail",
                             currentEx.Message.TrimStart('$')
                         ),
-                        currentLaunchOptions?.SaveBatch is null
-                            ? Lang.Text("Launch.Error.Title")
-                            : Lang.Text("Launch.Error.ExportScriptTitle"));
+                        Buttons = DialogButtons.Ok,
+                        ForceWait = true
+                    });
                 return;
             }
 

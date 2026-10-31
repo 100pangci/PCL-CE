@@ -3,7 +3,6 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Markup;
 using PCL.Core.App.Localization;
-using PCL.Core.Utils;
 
 namespace PCL;
 
@@ -24,7 +23,7 @@ public partial class PageComp
     public PageCompViewModel ViewModel => _vm;
 
     // 结果 UI 化
-    private void Load_OnFinish(bool scrollToTop = true)
+    private void Load_OnFinish()
     {
         try
         {
@@ -47,8 +46,7 @@ public partial class PageComp
             _vm.ApplyErrorState(storage);
 
             // 强制返回顶部
-            if (scrollToTop)
-                ScrollToTop();
+            ScrollToTop();
         }
         catch (Exception ex)
         {
@@ -70,7 +68,7 @@ public partial class PageComp
                 var errorMessage = "";
                 if (loader.Error is not null)
                     errorMessage = loader.Error.Message;
-                if (loader.Error is InvalidJsonException)
+                if (errorMessage.Contains(Lang.Text("Common.Error.InvalidJson")))
                 {
                     Common.Log($"[Download] 下载的{TypeNameSpaced}列表 json 文件损坏，已自动重试", Common.LogLevel.Debug);
                     ((MyPageRight)Parent).PageLoaderRestart();
@@ -109,12 +107,6 @@ public partial class PageComp
             Common.RunInUi(() => CardPages.IsEnabled = true);
             loader.Start();
         });
-    }
-
-    // 安装已有整合包按钮
-    private void BtnSearchInstallModPack_Click(object sender, EventArgs e)
-    {
-        Modpack.ModpackInstall();
     }
 
     /// <summary>
@@ -189,19 +181,11 @@ public partial class PageComp
                 return;
             field = value;
             _vm.IsInstallModPackVisible = value == Comp.CompType.ModPack;
-            _pageType = value;
             loader.name = Lang.Text("Download.Comp.List.Source.ResourceFetch", TypeName);
-            LocalizedText.TryBind(PanSearchBox, "HintText",
-                () => Lang.Text(Comp.GetCompSearchKey(_pageType)));
-            LocalizedText.TryBind(Load, "Text",
-                () => Lang.Text(Comp.GetCompLoadingKey(_pageType)));
+            PanSearchBox.HintText = Comp.GetCompSearchName(value);
+            _vm.LoadingText = Comp.GetCompLoadingName(value);
         }
     } = (Comp.CompType)(-1);
-
-    /// <summary>
-    ///     当前资源类型的副本。绑定委托需要在语言变更后读取最新值，因此单独保存一份。
-    /// </summary>
-    private Comp.CompType _pageType = (Comp.CompType)(-1);
 
     #endregion
 
@@ -225,32 +209,9 @@ public partial class PageComp
         IsVisibleChanged += PageComp_IsVisibleChanged;
         InitializeComponent();
         DataContext = _vm;
-        Load.StateChanged += Load_State;
-        BtnPageFirst.Click += BtnPageFirst_Click;
-        BtnPageLeft.Click += BtnPageLeft_Click;
-        BtnPageRight.Click += BtnPageRight_Click;
-        PanSearchBox.Search += (_, _) => StartNewSearch();
-        PanSearchBox.KeyDown += EnterTrigger;
-        TextSearchVersion.KeyDown += EnterTrigger;
-        BtnSearchReset.Click += (_, _) => ResetFilter();
-        BtnSearchInstallModPack.Click += BtnSearchInstallModPack_Click;
-        // PageComp 是 MyPageRight 的子控件而非页面本身，无法通过 MyPageRight 的刷新钩子感知语言变更，
-        // 因此在重新挂载到可视树时自行检查并重建卡片（标签、版本描述等文本按新语言重新求值）。
-        Loaded += (_, _) =>
-        {
-            if (_localizationRevision == LocalizationService.UiRevision)
-                return;
-            _localizationRevision = LocalizationService.UiRevision;
-            if (storage.results.Count == 0)
-                return;
-            // 重建会清空列表，先记下滚动位置以免跳回顶部
-            var savedOffset = VerticalOffset;
-            Load_OnFinish(false);
-            Dispatcher.BeginInvoke(new Action(() => ScrollToVerticalOffset(savedOffset)));
-        };
     }
 
-    private int _localizationRevision = LocalizationService.UiRevision;
+    private void PanSearchBox_Search(object sender, EventArgs e) => StartNewSearch();
 
     private void PageCompControls_Inited(object sender, EventArgs e)
     {
@@ -302,21 +263,21 @@ public partial class PageComp
         // 根据页面类型控制加载器选择的显示
         if (PageType == Comp.CompType.Shader)
         {
-            LabLoader.Visibility = Visibility.Visible;
-            ComboSearchLoader.Visibility = Visibility.Collapsed;
-            ComboSearchShaderLoader.Visibility = Visibility.Visible;
+            _vm.IsLoaderLabelVisible = true;
+            _vm.IsLoaderComboVisible = false;
+            _vm.IsShaderLoaderComboVisible = true;
         }
         else if (PageType == Comp.CompType.Mod || PageType == Comp.CompType.ModPack)
         {
-            LabLoader.Visibility = Visibility.Visible;
-            ComboSearchLoader.Visibility = Visibility.Visible;
-            ComboSearchShaderLoader.Visibility = Visibility.Collapsed;
+            _vm.IsLoaderLabelVisible = true;
+            _vm.IsLoaderComboVisible = true;
+            _vm.IsShaderLoaderComboVisible = false;
         }
         else
         {
-            LabLoader.Visibility = Visibility.Collapsed;
-            ComboSearchLoader.Visibility = Visibility.Collapsed;
-            ComboSearchShaderLoader.Visibility = Visibility.Collapsed;
+            _vm.IsLoaderLabelVisible = false;
+            _vm.IsLoaderComboVisible = false;
+            _vm.IsShaderLoaderComboVisible = false;
         }
     }
 
@@ -329,11 +290,9 @@ public partial class PageComp
     private Comp.CompProjectRequest LoaderInput()
     {
         var request = new Comp.CompProjectRequest(PageType, storage, (page + 1) * pageSize);
-        var gameVersion = TextSearchVersion.SelectedIndex == 0
-            ? null
-            : TextSearchVersion.Text.Contains('.') || TextSearchVersion.Text.Contains('w')
-                ? TextSearchVersion.Text
-                : null;
+        var gameVersion = TextSearchVersion.Text == Lang.Text("Download.Comp.Filter.Version.AllInputAvailable") ? null :
+            TextSearchVersion.Text.Contains(".") || TextSearchVersion.Text.Contains("w") ? TextSearchVersion.Text :
+            null;
         var modLoader = Comp.CompLoaderType.Any;
         if (PageType == Comp.CompType.Mod || PageType == Comp.CompType.ModPack) // 只有 Mod 考虑加载器
         {
@@ -387,6 +346,7 @@ public partial class PageComp
     private void ResetFilter()
     {
         PanSearchBox.Text = "";
+        TextSearchVersion.Text = Lang.Text("Download.Comp.Filter.Version.AllInputAvailable");
         TextSearchVersion.SelectedIndex = 0;
         ComboSearchSource.SelectedIndex = 0;
         ComboSearchTag.SelectedIndex = 0;
