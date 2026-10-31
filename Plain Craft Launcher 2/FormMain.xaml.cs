@@ -1,4 +1,4 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.IO;
 using System.Net;
 using System.Runtime.InteropServices;
@@ -11,9 +11,11 @@ using PCL.Core.App;
 using PCL.Core.Minecraft.Profile;
 using PCL.Core.App.IoC;
 using PCL.Core.App.Localization;
+using PCL.Core.UI.Hints;
 using PCL.Core.Logging;
 using PCL.Core.Minecraft;
 using PCL.Core.UI;
+using PCL.Core.UI.Dialogs;
 using PCL.Core.UI.Theme;
 using PCL.Core.Utils;
 using PCL.Core.Utils.OS;
@@ -45,8 +47,13 @@ public partial class FormMain
                 changelog = Common.ReadFile(changelogFile);
             else
                 changelog = Lang.Text("Main.UpdateLog.Empty");
-            if (Launcher.MyMsgBoxMarkdown(changelog,
-                    Lang.Text("Main.UpdateLog.Title", Common.VersionBranchName, Common.VersionBaseName), Lang.Text("Common.Action.Confirm"), Lang.Text("Main.UpdateLog.FullChangelog")) ==
+            if ((DialogService.Instance.Show(new MarkdownDialogRequest
+            {
+                Title = Lang.Text("Main.UpdateLog.Title", Common.VersionBranchName, Common.VersionBaseName),
+                Content = changelog,
+                Buttons = DialogButtons.Create("Common.Action.Confirm", "Main.UpdateLog.FullChangelog"),
+                ForceWait = true
+            }).Result?.Button ?? 0) ==
                 2) Common.OpenWebsite("https://github.com/PCL-Community/PCL2-CE/releases");
         }, "UpdateLog Output");
     }
@@ -92,11 +99,7 @@ public partial class FormMain
         // 注册拖拽事件（不能直接加 Handles，否则没用；#6340）
         AddHandler(DragDrop.DragEnterEvent, new DragEventHandler(HandleDrag), true);
         AddHandler(DragDrop.DragOverEvent, new DragEventHandler(HandleDrag), true);
-        // 注册 MsgBox 事件
-        MsgBoxWrapper.OnShow += Launcher.MsgBoxWrapper_OnShow;
         // 注册 Hint 事件
-        HintWrapper.OnShow += HintService.HintWrapper_OnShow;
-        WeakLanguageChanged.Add(this, OnLanguageChanged);
         // 加载 UI
         InitializeComponent();
         Opacity = 0d;
@@ -141,7 +144,7 @@ public partial class FormMain
         Launcher.frmLaunchRight.PageState = MyPageRight.PageStates.ContentStay;
         // 调试模式提醒
         if (Common.modeDebug)
-            HintService.Hint(Lang.Text("Main.DebugMode.Hint"));
+            HintService.Show(Hints.Info(Lang.Text("Main.DebugMode.Hint")));
         // 尽早执行的加载池
         GameFolders.McFolderListLoader
             .Start(0); // 为了让下载已存在文件检测可以正常运行，必须跑一次；为了让启动按钮尽快可用，需要尽早执行；为了与 PageLaunchLeft 联动，需要为 0 而不是 GetUuid
@@ -241,21 +244,31 @@ public partial class FormMain
                     var hint = Lang.Text("Main.SpecialVersion.CiHint");
 #endif
 
-                    Launcher.MyMsgBox(
-                        $"{hint}{"\r\n"}{"\r\n"}{Lang.Text("Main.SpecialVersion.HideHintNotice")}",
-                        Lang.Text("Main.SpecialVersion.Title"), Lang.Text("Main.SpecialVersion.IUnderstand"), Lang.Text("Main.SpecialVersion.OpenDownloadPageAndExit"), isWarn: true, button2Action: () =>
+                    DialogService.Instance.Show(new TextDialogRequest
+                    {
+                        Title = Lang.Text("Main.SpecialVersion.Title"),
+                        Content = $"{hint}{"\r\n"}{"\r\n"}{Lang.Text("Main.SpecialVersion.HideHintNotice")}",
+                        Buttons = DialogButtons.From(DialogButton.Create(Lang.Text("Main.SpecialVersion.IUnderstand")), DialogButton.Create(Lang.Text("Main.SpecialVersion.OpenDownloadPageAndExit"), () =>
                         {
                             Common.OpenWebsite("https://github.com/PCL-Community/PCL2-CE/releases/latest");
                             EndProgram(false);
-                        });
+                        })),
+                        IsWarn = true,
+                        ForceWait = true
+                    });
                 }
 
 
 #endif
                 // EULA 提示
                 if (!States.System.LauncherEula)
-                    switch (Launcher.MyMsgBox(Lang.Text("Main.Eula.Message"), Lang.Text("Main.Eula.Title"), Lang.Text("Common.Action.Agree"), Lang.Text("Common.Action.Decline"), Lang.Text("Main.Eula.View"),
-                                button3Action: () => Common.OpenWebsite("https://shimo.im/docs/rGrd8pY8xWkt6ryW")))
+                    switch ((DialogService.Instance.Show(new TextDialogRequest
+                    {
+                        Title = Lang.Text("Main.Eula.Title"),
+                        Content = Lang.Text("Main.Eula.Message"),
+                        Buttons = DialogButtons.From(DialogButton.Create(Lang.Text("Common.Action.Agree")), DialogButton.Create(Lang.Text("Common.Action.Decline")), DialogButton.Create(Lang.Text("Main.Eula.View"), () => Common.OpenWebsite("https://shimo.im/docs/rGrd8pY8xWkt6ryW"))),
+                        ForceWait = true
+                    }).Result?.Button ?? 0))
                     {
                         case 1:
                             {
@@ -272,9 +285,13 @@ public partial class FormMain
                 // 遥测提示
                 if (Config.System.TelemetryConfig.IsDefault())
                 {
-                    var selection = Launcher.MyMsgBox(
-                                Lang.Text("Main.Telemetry.Message"),
-                                Lang.Text("Main.Telemetry.Title"), Lang.Text("Common.Action.Agree"), Lang.Text("Common.Action.Decline"));
+                    var selection = (DialogService.Instance.Show(new TextDialogRequest
+                    {
+                        Title = Lang.Text("Main.Telemetry.Title"),
+                        Content = Lang.Text("Main.Telemetry.Message"),
+                        Buttons = DialogButtons.AgreeDecline,
+                        ForceWait = true
+                    }).Result?.Button ?? 0);
                     Config.System.TelemetryConfig.SetValue(selection == 1, forceNewValue: true);
                 }
                 // 启动加载器池
@@ -354,7 +371,13 @@ public partial class FormMain
         if (lastVersionCode < 521 && Config.Preference.Homepage.SelectedPreset >= 3)
         {
             Config.Preference.Homepage.SelectedPreset = 0;
-            Launcher.MyMsgBox(Lang.Text("Main.HomepageReset.Content"), Lang.Text("Main.HomepageReset.Title"));
+            DialogService.Instance.Show(new TextDialogRequest
+            {
+                Title = Lang.Text("Main.HomepageReset.Title"),
+                Content = Lang.Text("Main.HomepageReset.Content"),
+                Buttons = DialogButtons.Ok,
+                ForceWait = true
+            });
         }
     }
 
@@ -508,7 +531,13 @@ public partial class FormMain
         // 发出警告
         if (sendWarning && NetFacade.HasDownloadingTask())
         {
-            if (Launcher.MyMsgBox(Lang.Text("Main.Exit.HasDownloadingTask"), Lang.Text("Common.Dialog.Title"), Lang.Text("Common.Action.Confirm"), Lang.Text("Common.Action.Cancel")) == 1)
+            if ((DialogService.Instance.Show(new TextDialogRequest
+            {
+                Title = Lang.Text("Common.Dialog.Title"),
+                Content = Lang.Text("Main.Exit.HasDownloadingTask"),
+                Buttons = DialogButtons.OkCancel,
+                ForceWait = true
+            }).Result?.Button ?? 0) == 1)
                 // 强行结束下载任务
                 Common.RunInNewThread(() =>
                 {
@@ -760,9 +789,9 @@ public partial class FormMain
         {
             PageSetupUI.HiddenForceShow = !PageSetupUI.HiddenForceShow;
             if (PageSetupUI.HiddenForceShow)
-                HintService.Hint(Lang.Text("Main.HiddenFeature.Disabled"), HintType.Success);
+                HintService.Show(Hints.Success(Lang.Text("Main.HiddenFeature.Disabled")));
             else
-                HintService.Hint(Lang.Text("Main.HiddenFeature.Enabled"), HintType.Success);
+                HintService.Show(Hints.Success(Lang.Text("Main.HiddenFeature.Enabled")));
             PageSetupUI.HiddenRefresh();
             return;
         }
@@ -781,7 +810,7 @@ public partial class FormMain
         if (e.Key == Key.Enter && pageCurrent == PageType.Launch)
         {
             if (Launcher.isAprilEnabled && !Launcher.isAprilGiveup)
-                HintService.Hint(Lang.Text("Main.April.Nope"));
+                HintService.Show(Hints.Info(Lang.Text("Main.April.Nope")));
             else
                 Launcher.frmLaunchLeft.LaunchButtonClick();
         }
@@ -794,7 +823,7 @@ public partial class FormMain
     private void FormMain_MouseDown(object sender, MouseButtonEventArgs e)
     {
         // 鼠标侧键返回上一级
-        if (Launcher.frmMain!.PanMsg.Children.Count > 0 || Launcher.WaitingMyMsgBox.Any())
+        if (Launcher.frmMain!.PanMsg.Children.Count > 0)
             return; // 弹窗中（#5513）
         if (e.ChangedButton == MouseButton.XButton1 || e.ChangedButton == MouseButton.XButton2)
             TriggerPageBack();
@@ -933,12 +962,17 @@ public partial class FormMain
                         Common.Log("[System] Authlib 拖拽：" + authlibServer);
                         if (!new HttpValidator().Validate(authlibServer).IsValid)
                         {
-                            HintService.Hint(Lang.Text("Main.FileDrag.AuthlibInvalid", authlibServer), HintType.Error);
+                            HintService.Show(Hints.Error(Lang.Text("Main.FileDrag.AuthlibInvalid", authlibServer)));
                             return;
                         }
 
-                        if (Launcher.MyMsgBox(Lang.Text("Main.FileDrag.CreateAuthlibProfile", authlibServer), Lang.Text("Main.FileDrag.CreateAuthlibProfileTitle"),
-                                Lang.Text("Common.Action.Confirm"), Lang.Text("Common.Action.Cancel")) == 2)
+                        if ((DialogService.Instance.Show(new TextDialogRequest
+                        {
+                            Title = Lang.Text("Main.FileDrag.CreateAuthlibProfileTitle"),
+                            Content = Lang.Text("Main.FileDrag.CreateAuthlibProfile", authlibServer),
+                            Buttons = DialogButtons.OkCancel,
+                            ForceWait = true
+                        }).Result?.Button ?? 0) == 2)
                             return;
                         Common.RunInUi(() =>
                         {
@@ -969,7 +1003,7 @@ public partial class FormMain
                 var filePathRaw = e.Data.GetData(DataFormats.FileDrop);
                 if (filePathRaw is null) // #2690
                 {
-                    HintService.Hint(Lang.Text("Main.FileDrag.ExtractFirst"), HintType.Error);
+                    HintService.Show(Hints.Error(Lang.Text("Main.FileDrag.ExtractFirst")));
                     return;
                 }
 
@@ -998,13 +1032,13 @@ public partial class FormMain
             // 基础检查
             if (Directory.Exists(filePathList.First()) && !File.Exists(filePathList.First()))
             {
-                HintService.Hint(Lang.Text("Main.FileDrag.FileOnly"), HintType.Error);
+                HintService.Show(Hints.Error(Lang.Text("Main.FileDrag.FileOnly")));
                 return;
             }
 
             if (!File.Exists(filePathList.First()))
             {
-                HintService.Hint(Lang.Text("Main.FileDrag.FileNotFound", filePathList.First()), HintType.Error);
+                HintService.Show(Hints.Error(Lang.Text("Main.FileDrag.FileNotFound", filePathList.First())));
                 return;
             }
 
@@ -1023,7 +1057,7 @@ public partial class FormMain
                 // 允许同类型的 Mod 文件或投影文件批量拖拽
                 else
                 {
-                    HintService.Hint(Lang.Text("Main.FileDrag.SameTypeOnly"), HintType.Error);
+                    HintService.Show(Hints.Error(Lang.Text("Main.FileDrag.SameTypeOnly")));
                     return;
                 }
             }
@@ -1034,7 +1068,13 @@ public partial class FormMain
             {
                 Common.Log("[System] 文件后缀为 XAML，作为主页加载");
                 if (File.Exists(Common.ExePath + @"PCL\Custom.xaml"))
-                    if (Launcher.MyMsgBox(Lang.Text("Main.FileDrag.HomepageExists"), Lang.Text("Main.FileDrag.OverwriteTitle"), Lang.Text("Common.Action.Overwrite"), Lang.Text("Common.Action.Cancel")) == 2)
+                    if ((DialogService.Instance.Show(new TextDialogRequest
+                    {
+                        Title = Lang.Text("Main.FileDrag.OverwriteTitle"),
+                        Content = Lang.Text("Main.FileDrag.HomepageExists"),
+                        Buttons = DialogButtons.Create("Common.Action.Overwrite", "Common.Action.Cancel"),
+                        ForceWait = true
+                    }).Result?.Button ?? 0) == 2)
                         return;
 
                 Common.CopyFile(filePath, Common.ExePath + @"PCL\Custom.xaml");
@@ -1042,7 +1082,7 @@ public partial class FormMain
                 {
                     Config.Preference.Homepage.Type = 1;
                     Launcher.frmLaunchRight.ForceRefresh();
-                    HintService.Hint(Lang.Text("Main.FileDrag.HomepageLoaded"), HintType.Success);
+                    HintService.Show(Hints.Success(Lang.Text("Main.FileDrag.HomepageLoaded")));
                 });
                 return;
             }
@@ -1075,7 +1115,7 @@ public partial class FormMain
                         var destLevelDat = Path.Combine(destFolder, "level.dat");
                         if (Directory.Exists(destFolder))
                         {
-                            HintService.Hint(Lang.Text("Main.FileDrag.SameFolderExists", destFolder), HintType.Error);
+                            HintService.Show(Hints.Error(Lang.Text("Main.FileDrag.SameFolderExists", destFolder)));
                             return;
                         }
 
@@ -1086,7 +1126,7 @@ public partial class FormMain
                             var saveRoot = SaveImportHelper.GetSaveRootDirectory(extractFolder);
                             if (saveRoot is null)
                             {
-                                HintService.Hint(Lang.Text("Main.FileDrag.SaveNotFound"), HintType.Error);
+                                HintService.Show(Hints.Error(Lang.Text("Main.FileDrag.SaveNotFound")));
                                 return;
                             }
 
@@ -1095,7 +1135,7 @@ public partial class FormMain
                             {
                                 if (Directory.Exists(destFolder))
                                     Common.DeleteDirectory(destFolder, true);
-                                HintService.Hint(Lang.Text("Main.FileDrag.SaveInvalid"), HintType.Error);
+                                HintService.Show(Hints.Error(Lang.Text("Main.FileDrag.SaveInvalid")));
                                 return;
                             }
                         }
@@ -1116,8 +1156,7 @@ public partial class FormMain
                                 Common.DeleteDirectory(extractFolder, true);
                         }
 
-                        HintService.Hint(Lang.Text("Main.FileDrag.Imported", Path.GetFileNameWithoutExtension(filePath)),
-                            HintType.Success);
+                        HintService.Show(Hints.Success(Lang.Text("Main.FileDrag.Imported", Path.GetFileNameWithoutExtension(filePath))));
                         if (Launcher.frmInstanceSaves is not null)
                             Common.RunInUi(() => Launcher.frmInstanceSaves.Reload());
                         return;
@@ -1128,12 +1167,12 @@ public partial class FormMain
                                        Common.GetFileNameFromPath(filePath);
                         if (File.Exists(destFile))
                         {
-                            HintService.Hint(Lang.Text("Main.FileDrag.SameFileExists", destFile), HintType.Error);
+                            HintService.Show(Hints.Error(Lang.Text("Main.FileDrag.SameFileExists", destFile)));
                             return;
                         }
 
                         Common.CopyFile(filePath, destFile);
-                        HintService.Hint(Lang.Text("Main.FileDrag.Imported", Common.GetFileNameFromPath(filePath)), HintType.Success);
+                        HintService.Show(Hints.Success(Lang.Text("Main.FileDrag.Imported", Common.GetFileNameFromPath(filePath))));
                         if (Launcher.frmInstanceResourcePack is not null)
                             Common.RunInUi(() => Launcher.frmInstanceResourcePack.ReloadCompFileList());
                         return;
@@ -1144,12 +1183,12 @@ public partial class FormMain
                                        Common.GetFileNameFromPath(filePath);
                         if (File.Exists(destFile))
                         {
-                            HintService.Hint(Lang.Text("Main.FileDrag.SameFileExists", destFile), HintType.Error);
+                            HintService.Show(Hints.Error(Lang.Text("Main.FileDrag.SameFileExists", destFile)));
                             return;
                         }
 
                         Common.CopyFile(filePath, destFile);
-                        HintService.Hint(Lang.Text("Main.FileDrag.Imported", Common.GetFileNameFromPath(filePath)), HintType.Success);
+                        HintService.Show(Hints.Success(Lang.Text("Main.FileDrag.Imported", Common.GetFileNameFromPath(filePath))));
                         if (Launcher.frmInstanceShader is not null)
                             Common.RunInUi(() => Launcher.frmInstanceShader.ReloadCompFileList());
                         return;
@@ -1165,13 +1204,13 @@ public partial class FormMain
                                Common.GetFileNameFromPath(filePath);
                 if (File.Exists(destFile))
                 {
-                    HintService.Hint(Lang.Text("Main.FileDrag.SameFileExists", destFile), HintType.Error);
+                    HintService.Show(Hints.Error(Lang.Text("Main.FileDrag.SameFileExists", destFile)));
                     return;
                 }
 
                 Directory.CreateDirectory(PageInstanceLeft.McInstance.PathIndie + @"schematics\");
                 Common.CopyFile(filePath, destFile);
-                HintService.Hint(Lang.Text("Main.FileDrag.Imported", Common.GetFileNameFromPath(filePath)), HintType.Success);
+                HintService.Show(Hints.Success(Lang.Text("Main.FileDrag.Imported", Common.GetFileNameFromPath(filePath))));
                 if (Launcher.frmInstanceSchematic is not null)
                     Common.RunInUi(() => Launcher.frmInstanceSchematic.ReloadCompFileList());
                 return;
@@ -1222,7 +1261,7 @@ public partial class FormMain
             } while (false);
 
             // 未知操作
-            HintService.Hint(Lang.Text("Main.FileDrag.UnknownOperation"));
+            HintService.Show(Hints.Info(Lang.Text("Main.FileDrag.UnknownOperation")));
         }, "文件拖拽");
     }
 
@@ -1527,16 +1566,6 @@ public partial class FormMain
         LabTitleInner.Text = PageNameGet(type);
     }
 
-    private static void OnLanguageChanged(FormMain form)
-    {
-        Common.RunInUi(() =>
-        {
-            // 次级页面标题栏由代码设置，语言变更后需要重新求值
-            if (!string.IsNullOrEmpty(form.PageNameGet(form.pageCurrent)))
-                form.PageNameRefresh();
-        });
-    }
-
     /// <summary>
     ///     刷新次级页面的名称。
     /// </summary>
@@ -1601,6 +1630,12 @@ public partial class FormMain
 
     public class PageStackData
     {
+        /// <summary>
+        /// <list type="bullet">
+        ///   <item><description>CompDetail: (CompProject, ExpandedTitles, TargetVersion, TargetLoader, ResourceType)</description></item>
+        ///   <item><description>VersionSaves: SavePath</description></item>
+        /// </list>
+        /// </summary>
         public (
             Comp.CompProject CompProject,
             List<string> ExpandedTitles,
@@ -2207,7 +2242,7 @@ public partial class FormMain
     {
         if (Launcher.isAprilEnabled && !Launcher.isAprilGiveup)
         {
-            HintService.Hint("=D", HintType.Success);
+            HintService.Show(Hints.Success("=D"));
             Launcher.isAprilGiveup = true;
             Launcher.frmLaunchLeft.AprilScaleTrans.ScaleX = 1d;
             Launcher.frmLaunchLeft.AprilScaleTrans.ScaleY = 1d;
@@ -2234,7 +2269,7 @@ public partial class FormMain
                 GameLaunch.mcLaunchLoaderReal.Abort();
             foreach (var Watcher in GameWatcher.mcWatcherList)
                 Watcher.Kill();
-            HintService.Hint(Lang.Text("Main.ShutdownMinecraft.Success"), HintType.Success);
+            HintService.Show(Hints.Success(Lang.Text("Main.ShutdownMinecraft.Success")));
         }
         catch (Exception ex)
         {

@@ -4,6 +4,8 @@ using System.IO;
 using System.Text;
 using PCL.Core.App;
 using PCL.Core.App.Localization;
+using PCL.Core.UI.Hints;
+using PCL.Core.UI.Dialogs;
 using PCL.Core.Utils;
 
 namespace PCL;
@@ -85,9 +87,7 @@ public static class GameFolders
 
             if (!folder.Contains('>') || !folder.EndsWithF(@"\"))
             {
-                HintService.Hint(
-                    Lang.Text("Select.Folder.Invalid", folder),
-                    HintType.Error);
+                HintService.Show(Hints.Error(Lang.Text("Select.Folder.Invalid", folder)));
                 continue;
             }
 
@@ -106,10 +106,14 @@ public static class GameFolders
             }
             catch (Exception ex)
             {
-                Launcher.MyMsgBox(
-                    Lang.Text("Select.Folder.Invalid.WithDetail", path, ex.ToString()),
-                    Lang.Text("Select.Folder.InvalidTitle"),
-                    isWarn: true);
+                DialogService.Instance.Show(new TextDialogRequest
+                {
+                    Title = Lang.Text("Select.Folder.InvalidTitle"),
+                    Content = Lang.Text("Select.Folder.Invalid.WithDetail", path, ex.ToString()),
+                    Buttons = DialogButtons.Ok,
+                    IsWarn = true,
+                    ForceWait = true
+                });
                 Common.Log(ex, $"无法访问 Minecraft 文件夹 {path}");
             }
         }

@@ -6,6 +6,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using PCL.Core.App;
 using PCL.Core.App.Localization;
+using PCL.Core.UI.Hints;
 using PCL.Core.Minecraft.Profile;
 using PCL.Core.Minecraft.Profile.Models;
 using PCL.Core.Utils;
@@ -13,7 +14,7 @@ using PCL.Network;
 
 namespace PCL;
 
-public partial class PageLaunchLeft
+public partial class PageLaunchLeft : IPageView
 {
     private double actualUsedHeight;
     private double actualUsedWidth;
@@ -54,19 +55,24 @@ public partial class PageLaunchLeft
         Loaded += PageLaunchLeft_Loaded;
         WeakLanguageChanged.Add(this, OnLanguageChanged);
         // Handles
-        BtnInstance.Click += BtnInstance_Click;
-        BtnLaunch.Click += BtnLaunch_Click;
-        BtnLaunch.Loaded += (_, _) => RefreshButtonsUI();
-        BtnCancel.Click += BtnCancel_Click;
-        BtnMore.Click += BtnMore_Click;
-        PanLaunchingInfo.SizeChanged += PanLaunchingInfo_SizeChangedW;
         PanLaunchingInfo.SizeChanged += PanLaunchingInfo_SizeChangedH;
         DataContext = _vm;
     }
 
+    private void BtnLaunch_Loaded(object sender, RoutedEventArgs e) => RefreshButtonsUI();
+
     public PageLaunchLeftViewModel ViewModel => _vm;
 
     private static void OnLanguageChanged(PageLaunchLeft page) => Common.RunInUi(page.RefreshButtonsUI);
+
+    // 常驻左侧页面，刷新由 Loaded 完成，导航钩子无需额外动作。
+    public void OnNavigatedTo(object? parameter)
+    {
+    }
+
+    public void OnNavigatedFrom()
+    {
+    }
 
     public void PageLaunchLeft_Loaded(object sender, RoutedEventArgs e)
     {
@@ -204,14 +210,6 @@ public partial class PageLaunchLeft
         Animations.AniEndControl();
     }
 
-    // 实例选择按钮
-    private void BtnInstance_Click(object sender, MouseButtonEventArgs e)
-    {
-        if (GameLaunch.mcLaunchLoader.State == Common.LoadState.Loading)
-            return;
-        Launcher.frmMain.PageChange(FormMain.PageType.InstanceSelect);
-    }
-
     // 启动按钮
     public void LaunchButtonClick()
     {
@@ -238,7 +236,7 @@ public partial class PageLaunchLeft
             {
                 if (File.Exists(InstanceList.McMcInstanceSelected.PathInstance + ".pclignore"))
                 {
-                    HintService.Hint(Lang.Text("Launch.Home.Instance.InstallingCannotLaunch"), HintType.Error);
+                    HintService.Show(Hints.Error(Lang.Text("Launch.Home.Instance.InstallingCannotLaunch")));
                     return;
                 }
 
@@ -293,7 +291,7 @@ public partial class PageLaunchLeft
                 _launchButtonAction = LaunchButtonAction.Loading;
                 Common.Log("[Minecraft] 启动按钮：正在加载 Minecraft 实例");
                 _vm.LaunchButtonText = Lang.Text("Launch.Home.Button.Loading");
-                BtnLaunch.IsEnabled = false;
+                _vm.IsLaunchButtonEnabled = false;
                 _vm.VersionNameText = Lang.Text("Launch.Home.Instance.Loading");
                 _vm.IsInstanceButtonEnabled = false;
                 _vm.MoreButtonVisibility = Visibility.Collapsed;
@@ -304,7 +302,7 @@ public partial class PageLaunchLeft
                 _launchButtonAction = LaunchButtonAction.Disabled;
                 Common.Log("[Minecraft] 启动按钮：无 Minecraft 实例，下载已禁用");
                 _vm.LaunchButtonText = Lang.Text("Launch.Home.Button.Launch");
-                BtnLaunch.IsEnabled = false;
+                _vm.IsLaunchButtonEnabled = false;
                 _vm.VersionNameText = Lang.Text("Launch.Home.Instance.NotFound");
                 _vm.IsInstanceButtonEnabled = true;
                 _vm.MoreButtonVisibility = Visibility.Collapsed;
@@ -315,7 +313,7 @@ public partial class PageLaunchLeft
                 _launchButtonAction = LaunchButtonAction.Download;
                 Common.Log("[Minecraft] 启动按钮：无 Minecraft 实例，要求下载");
                 _vm.LaunchButtonText = Lang.Text("Launch.Home.Button.Download");
-                BtnLaunch.IsEnabled = true;
+                _vm.IsLaunchButtonEnabled = true;
                 _vm.VersionNameText = Lang.Text("Launch.Home.Instance.NotFound");
                 _vm.IsInstanceButtonEnabled = true;
                 _vm.MoreButtonVisibility = Visibility.Collapsed;
@@ -328,9 +326,9 @@ public partial class PageLaunchLeft
                 _vm.LaunchButtonText = Lang.Text("Launch.Home.Button.Launch");
                 _vm.IsInstanceButtonEnabled = true;
                 if (ProfileService.Current is not null)
-                    BtnLaunch.IsEnabled = true;
+                    _vm.IsLaunchButtonEnabled = true;
                 else
-                    BtnLaunch.IsEnabled = false;
+                    _vm.IsLaunchButtonEnabled = false;
                 _vm.VersionNameText = InstanceList.McMcInstanceSelected.Name;
                 break;
             }
@@ -345,48 +343,6 @@ public partial class PageLaunchLeft
                 ? Visibility.Collapsed
                 : Visibility.Visible;
         if (currentState == 3) _vm.MoreButtonVisibility = _vm.InstanceButtonVisibility;
-    }
-
-    // 取消按钮
-    private void BtnCancel_Click(object sender, MouseButtonEventArgs e)
-    {
-        if (GameLaunch.mcLaunchLoaderReal is not null)
-        {
-            GameLaunch.mcLaunchLoaderReal.Abort();
-            GameLaunch.McLaunchLog("已取消启动");
-            try
-            {
-                if (GameLaunch.mcLaunchWatcher is not null)
-                    GameLaunch.mcLaunchWatcher.Kill();
-                else if (GameLaunch.mcLaunchProcess is not null)
-                    if (!GameLaunch.mcLaunchProcess.HasExited)
-                        GameLaunch.mcLaunchProcess.Kill();
-            }
-            catch (Exception ex)
-            {
-                Common.Log(
-                    ex,
-                    Lang.Text("Minecraft.Launch.Error.CancelProcess"),
-                    Common.LogLevel.Hint,
-                    userSummary: Lang.Text("Minecraft.Launch.Error.CancelProcess"));
-            }
-        }
-    }
-
-    // 实例设置按钮
-    private void BtnMore_Click(object sender, MouseButtonEventArgs e)
-    {
-        if (GameLaunch.mcLaunchLoader.State == Common.LoadState.Loading)
-            return;
-        InstanceList.McMcInstanceSelected.Load();
-        PageInstanceLeft.McInstance = InstanceList.McMcInstanceSelected;
-        if (File.Exists(InstanceList.McMcInstanceSelected.PathInstance + ".pclignore"))
-        {
-            HintService.Hint(Lang.Text("Launch.Home.Instance.InstallingCannotSetup"), HintType.Error);
-            return;
-        }
-
-        Launcher.frmMain.PageChange(FormMain.PageType.InstanceSetup);
     }
 
     /// <summary>
@@ -484,11 +440,11 @@ public partial class PageLaunchLeft
                     ease: new Animations.AniEaseOutFluent())
             };
             var isDownloadStateChanged =
-                hasLaunchDownloader == (LabLaunchingDownload.Visibility == Visibility.Collapsed);
+                hasLaunchDownloader == (_vm.LaunchingDownloadVisibility == Visibility.Collapsed);
             if (isDownloadStateChanged)
             {
-                LabLaunchingDownload.Visibility = Visibility.Visible;
-                LabLaunchingDownloadLeft.Visibility = Visibility.Visible;
+                _vm.LaunchingDownloadVisibility = Visibility.Visible;
+                _vm.LaunchingDownloadVisibility = Visibility.Visible;
                 animList.AddRange(new[]
                 {
                     Animations.AaOpacity(LabLaunchingDownload,
@@ -499,19 +455,19 @@ public partial class PageLaunchLeft
                     {
                         if (!hasLaunchDownloader)
                         {
-                            LabLaunchingDownload.Visibility = Visibility.Collapsed;
-                            LabLaunchingDownloadLeft.Visibility = Visibility.Collapsed;
+                            _vm.LaunchingDownloadVisibility = Visibility.Collapsed;
+                            _vm.LaunchingDownloadVisibility = Visibility.Collapsed;
                         }
                     }, 110)
                 });
             }
 
-            var isProgressStateChanged = !isLaunched == (LabLaunchingProgress.Visibility == Visibility.Collapsed);
+            var isProgressStateChanged = !isLaunched == (_vm.LaunchingProgressVisibility == Visibility.Collapsed);
             if (isProgressStateChanged)
             {
-                LabLaunchingProgress.Visibility = Visibility.Visible;
-                LabLaunchingProgressLeft.Visibility = Visibility.Visible;
-                if (isLaunched && shouldShowHint) PanLaunchingHint.Visibility = Visibility.Visible;
+                _vm.LaunchingProgressVisibility = Visibility.Visible;
+                _vm.LaunchingProgressVisibility = Visibility.Visible;
+                if (isLaunched && shouldShowHint) _vm.LaunchingHintVisibility = Visibility.Visible;
                 animList.AddRange(new[]
                 {
                     Animations.AaOpacity(LabLaunchingProgress, (!isLaunched ? 1 : 0) - LabLaunchingProgress.Opacity,
@@ -626,18 +582,18 @@ public partial class PageLaunchLeft
                 : Lang.Text("Launch.Status.Title.ExportingScript"));
         LabLaunchingProgress.Text = Lang.Number(0d, "P2");
         LabLaunchingProgress.Opacity = 1d;
-        LabLaunchingDownload.Visibility = Visibility.Visible;
+        _vm.LaunchingDownloadVisibility = Visibility.Visible;
         LabLaunchingProgressLeft.Opacity = 0.6d;
-        LabLaunchingDownload.Visibility = Visibility.Visible;
+        _vm.LaunchingDownloadVisibility = Visibility.Visible;
         _vm.ApplyLaunchingDownload(0);
         LabLaunchingDownload.Opacity = 0d;
-        LabLaunchingDownload.Visibility = Visibility.Collapsed;
+        _vm.LaunchingDownloadVisibility = Visibility.Collapsed;
         LabLaunchingDownloadLeft.Opacity = 0d;
-        LabLaunchingDownloadLeft.Visibility = Visibility.Collapsed;
+        _vm.LaunchingDownloadVisibility = Visibility.Collapsed;
         ProgressLaunchingFinished.Width = new GridLength(0d, GridUnitType.Star);
         ProgressLaunchingUnfinished.Width = new GridLength(1d, GridUnitType.Star);
         PanLaunchingHint.Opacity = 0d;
-        PanLaunchingHint.Visibility = Visibility.Collapsed;
+        _vm.LaunchingHintVisibility = Visibility.Collapsed;
         PanLaunchingInfo.Width = double.NaN; // 重置宽度改变动画
         GameLaunch.mcLaunchProcess = null;
         GameLaunch.mcLaunchWatcher = null;
@@ -842,13 +798,13 @@ public partial class PageLaunchLeft
         else if (ProfileService.Current is not null)
         {
             type = PageType.ProfileSkin;
-            BtnLaunch.IsEnabled = true;
+            _vm.IsLaunchButtonEnabled = true;
         }
         else
         {
             type = PageType.Profile;
             if (_launchButtonAction != LaunchButtonAction.Download)
-                BtnLaunch.IsEnabled = false;
+                _vm.IsLaunchButtonEnabled = false;
         }
 
         // 刷新页面

@@ -1,20 +1,16 @@
-﻿using System.IO;
-using System.Text;
+using PCL.Core.App;
+using PCL.Core.App.Localization;
+using PCL.Core.UI.Dialogs;
+using PCL.Core.UI.Hints;
+using PCL.Core.UI.Theme;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Threading;
-using Microsoft.VisualBasic.FileIO;
-using PCL.Core.App;
-using PCL.Core.UI;
-using PCL.Core.UI.Theme;
-using PCL.Network;
-using PCL.Network.Loaders;
-using FileSystem = Microsoft.VisualBasic.FileSystem;
-using PCL.Core.App.Localization;
-using SortMethod = PCL.PageInstanceSavesDatapackViewModel.DatapackSortMethod;
 using FilterType = PCL.PageInstanceSavesDatapackViewModel.DatapackFilterType;
+using SortMethod = PCL.PageInstanceSavesDatapackViewModel.DatapackSortMethod;
 
 namespace PCL;
 
@@ -42,34 +38,11 @@ public partial class PageInstanceSavesDatapack : IRefreshable, IPageView
         Unloaded += Page_Unloaded;
         Loaded += (_, _) => RefreshOnNavigate();
         LoaderInit();
-        PageExit += UnselectedAllWithAnimation;
-        // Handles
-        Load.Click += Load_Click;
-        BtnManageOpen.Click += BtnManageOpen_Click;
-        BtnHintOpen.Click += BtnManageOpen_Click;
-        BtnManageSelectAll.Click += BtnManageSelectAll_Click;
-        BtnManageInstall.Click += BtnManageInstall_Click;
-        BtnHintInstall.Click += BtnManageInstall_Click;
-        BtnManageDownload.Click += BtnManageDownload_Click;
-        BtnHintDownload.Click += BtnManageDownload_Click;
-        BtnManageInfoExport.Click += BtnManageInfoExport_Click;
-        Load.StateChanged += (_, _, _) => UnselectedAllWithAnimation();
-        SearchBox.PreviewKeyDown += SearchBox_PreviewKeyDown;
-        BtnFilterAll.Check += ChangeFilter;
-        BtnFilterCanUpdate.Check += ChangeFilter;
-        BtnFilterDisabled.Check += ChangeFilter;
-        BtnFilterEnabled.Check += ChangeFilter;
-        BtnFilterError.Check += ChangeFilter;
-        BtnSort.Click += BtnSortClick;
-        BtnSelectEnable.Click += BtnSelectEnable_Click;
-        BtnSelectDisable.Click += BtnSelectDisable_Click;
-        BtnSelectUpdate.Click += BtnSelectUpdate_Click;
-        BtnSelectDelete.Click += BtnSelectDelete_Click;
-        BtnSelectCancel.Click += BtnSelectCancel_Click;
-        BtnSelectFavorites.Click += BtnSelectFavorites_Click;
-        BtnSelectShare.Click += BtnSelectShare_Click;
-        SearchBox.TextChanged += SearchRun;
     }
+
+    // Handles
+    private void Load_StateChanged(object sender, MyLoading.MyLoadingState state, MyLoading.MyLoadingState oldState) =>
+        UnselectedAllWithAnimation();
 
     private void Page_Unloaded(object sender, RoutedEventArgs e)
     {
@@ -140,7 +113,6 @@ public partial class PageInstanceSavesDatapack : IRefreshable, IPageView
                 _vm.Filter = FilterType.All;
                 SyncFilterRadios();
                 PanBack.ScrollToHome();
-                SearchBox.Text = "";
                 _vm.SearchText = "";
                 RefreshUI();
             });
@@ -181,14 +153,6 @@ public partial class PageInstanceSavesDatapack : IRefreshable, IPageView
 
     #region UI 化
 
-    protected override void RefreshLocalization()
-    {
-        _vm.SetSortMethod(_vm.SortMethod);
-        foreach (var item in datapackItems.Values)
-            item.Refresh();
-        RefreshBars();
-    }
-
     private void LoadUIFromLoaderOutput()
     {
         try
@@ -207,7 +171,7 @@ public partial class PageInstanceSavesDatapack : IRefreshable, IPageView
             {
                 _vm.Filter = FilterType.All;
                 SyncFilterRadios();
-                SearchBox.Text = "";
+                _vm.SearchText = "";
                 _vm.SetSortMethod(SortMethod.CompName);
                 RefreshUI();
             });
@@ -263,14 +227,15 @@ public partial class PageInstanceSavesDatapack : IRefreshable, IPageView
 
         // 图标按钮
         var btnOpen = new MyIconButton { LogoScale = 1.05d, SvgIcon = "lucide/folder-open", Tag = sender };
-        btnOpen.TrySetLocalizedValue("ToolTip", "Instance.Saves.OpenFileLocation");
+        btnOpen.ToolTip = Lang.Text("Instance.Saves.OpenFileLocation");
         ToolTipService.SetPlacement(btnOpen, PlacementMode.Center);
         ToolTipService.SetVerticalOffset(btnOpen, 30d);
         ToolTipService.SetHorizontalOffset(btnOpen, 2d);
-        btnOpen.Click += (sender, e) => Open_Click((MyIconButton)sender, e);
+        btnOpen.Command = _vm.OpenFileLocationCommand;
+        btnOpen.CommandParameter = sender.Entry;
 
         var btnCont = new MyIconButton { LogoScale = 1d, SvgIcon = "lucide/info", Tag = sender };
-        btnCont.TrySetLocalizedValue("ToolTip", "Instance.Saves.Detail");
+        btnCont.ToolTip = Lang.Text("Instance.Saves.Detail");
         ToolTipService.SetPlacement(btnCont, PlacementMode.Center);
         ToolTipService.SetVerticalOffset(btnCont, 30d);
         ToolTipService.SetHorizontalOffset(btnCont, 2d);
@@ -278,7 +243,7 @@ public partial class PageInstanceSavesDatapack : IRefreshable, IPageView
         sender.MouseRightButtonUp += Info_Click;
 
         var btnDelete = new MyIconButton { LogoScale = 1d, SvgIcon = "lucide/trash-2", Tag = sender };
-        btnDelete.TrySetLocalizedValue("ToolTip", "Common.Action.Delete");
+        btnDelete.ToolTip = Lang.Text("Common.Action.Delete");
         ToolTipService.SetPlacement(btnDelete, PlacementMode.Center);
         ToolTipService.SetVerticalOffset(btnDelete, 30d);
         ToolTipService.SetHorizontalOffset(btnDelete, 2d);
@@ -287,7 +252,7 @@ public partial class PageInstanceSavesDatapack : IRefreshable, IPageView
         if (sender.Entry.State == LocalComp.LocalCompFile.LocalFileStatus.Fine)
         {
             var btnDisable = new MyIconButton { LogoScale = 1d, SvgIcon = "lucide/circle-minus", Tag = sender };
-            btnDisable.TrySetLocalizedValue("ToolTip", "Instance.Resource.Disable");
+            btnDisable.ToolTip = Lang.Text("Instance.Resource.Disable");
             ToolTipService.SetPlacement(btnDisable, PlacementMode.Center);
             ToolTipService.SetVerticalOffset(btnDisable, 30d);
             ToolTipService.SetHorizontalOffset(btnDisable, 2d);
@@ -297,7 +262,7 @@ public partial class PageInstanceSavesDatapack : IRefreshable, IPageView
         else if (sender.Entry.State == LocalComp.LocalCompFile.LocalFileStatus.Disabled)
         {
             var btnEnable = new MyIconButton { LogoScale = 1d, SvgIcon = "lucide/circle-check", Tag = sender };
-            btnEnable.TrySetLocalizedValue("ToolTip", "Instance.Resource.Enable");
+            btnEnable.ToolTip = Lang.Text("Instance.Resource.Enable");
             ToolTipService.SetPlacement(btnEnable, PlacementMode.Center);
             ToolTipService.SetVerticalOffset(btnEnable, 30d);
             ToolTipService.SetHorizontalOffset(btnEnable, 2d);
@@ -422,23 +387,8 @@ public partial class PageInstanceSavesDatapack : IRefreshable, IPageView
     /// <summary>
     ///     打开 datapacks 文件夹。
     /// </summary>
-    private void BtnManageOpen_Click(object sender, EventArgs e)
-    {
-        try
-        {
-            var datapackPath = Path.Combine(PageInstanceSavesLeft.currentSave, "datapacks");
-            Directory.CreateDirectory(datapackPath);
-            Common.OpenExplorer(datapackPath);
-        }
-        catch (Exception ex)
-        {
-            Common.Log(
-                ex,
-                "打开 datapacks 文件夹失败",
-                Common.LogLevel.Msgbox,
-                userSummary: Lang.Text("Instance.Saves.Error.OperationFailed"));
-        }
-    }
+    private void BtnManageOpen_Click(object sender, EventArgs e) =>
+        _vm.OpenFolderCommand.Execute(null);
 
     /// <summary>
     ///     全选。
@@ -451,33 +401,8 @@ public partial class PageInstanceSavesDatapack : IRefreshable, IPageView
     /// <summary>
     ///     安装数据包。
     /// </summary>
-    private async void BtnManageInstall_Click(object sender, MouseButtonEventArgs e)
-    {
-        var ctl = sender as Control;
-        if (ctl is not null) ctl.IsEnabled = false;
-        try
-        {
-            var fileList = SystemDialogs.SelectFiles(
-                Lang.Text("Instance.Saves.Datapack.Install.FileDialog.Filter"),
-                Lang.Text("Instance.Saves.Datapack.Install.FileDialog.Title"));
-            if (fileList is null || fileList.Length == 0)
-                return;
-            await PageInstanceSavesDatapackViewModel.InstallFilesAsync(fileList);
-            Refresh();
-        }
-        catch (Exception ex)
-        {
-            Common.Log(
-                ex,
-                "复制数据包文件失败",
-                Common.LogLevel.Msgbox,
-                userSummary: Lang.Text("Instance.Saves.Error.OperationFailed"));
-        }
-        finally
-        {
-            if (ctl is not null) ctl.IsEnabled = true;
-        }
-    }
+    private void BtnManageInstall_Click(object sender, MouseButtonEventArgs e) =>
+        _vm.InstallCommand.Execute(null);
 
     /// <summary>
     ///     安装数据包文件。
@@ -490,57 +415,14 @@ public partial class PageInstanceSavesDatapack : IRefreshable, IPageView
     /// <summary>
     ///     下载数据包。
     /// </summary>
-    private void BtnManageDownload_Click(object sender, MouseButtonEventArgs e)
-    {
-        var datapackPath = Path.Combine(PageInstanceSavesLeft.currentSave, "datapacks");
-        Directory.CreateDirectory(datapackPath);
-        PageDownloadCompDetail.cachedFolder[Comp.CompType.DataPack] = datapackPath;
-        Launcher.frmMain.PageChange(FormMain.PageType.Download, FormMain.PageSubType.DownloadDataPack);
-        PageComp.targetVersion = PageInstanceLeft.McInstance; // 将当前实例设置为筛选器
-    }
+    private void BtnManageDownload_Click(object sender, MouseButtonEventArgs e) =>
+        _vm.DownloadCommand.Execute(null);
 
     /// <summary>
     ///     导出信息。
     /// </summary>
-    private async void BtnManageInfoExport_Click(object sender, MouseButtonEventArgs e)
-    {
-        var ctl = sender as Control;
-        if (ctl is not null) ctl.IsEnabled = false;
-        try
-        {
-            var choice = await Launcher.MyMsgBoxAsync(
-                Lang.Text("Instance.Saves.Datapack.Export.Mode.Message"),
-                Lang.Text("Instance.Resource.Export.Mode.Title"), Lang.Text("Instance.Resource.Export.Mode.Txt"),
-                Lang.Text("Instance.Resource.Export.Mode.Csv"), Lang.Text("Common.Action.Cancel"));
-            if (choice is not (1 or 2))
-                return;
-
-            var isCsv = choice == 2;
-            await _vm.EnsureFileInfoAsync(LocalComp.CompResourceListLoader.output.Select(entry => entry.path));
-            var content = _vm.BuildExportContent(isCsv);
-            var savePath = SystemDialogs.SelectSaveFile(
-                Lang.Text("Instance.Resource.Export.SelectSaveLocation"),
-                Common.GetFolderNameFromPath(PageInstanceSavesLeft.currentSave) +
-                (isCsv ? "的数据包信息.csv" : "的数据包信息.txt"),
-                Lang.Text("Instance.Resource.Export.FilesFilter"));
-            if (string.IsNullOrWhiteSpace(savePath))
-                return;
-            await _vm.WriteExportFileAsync(savePath, content);
-            Common.OpenExplorer(savePath);
-        }
-        catch (Exception ex)
-        {
-            Common.Log(
-                ex,
-                "导出数据包信息失败",
-                Common.LogLevel.Msgbox,
-                userSummary: Lang.Text("Instance.Saves.Error.OperationFailed"));
-        }
-        finally
-        {
-            if (ctl is not null) ctl.IsEnabled = true;
-        }
-    }
+    private void BtnManageInfoExport_Click(object sender, MouseButtonEventArgs e) =>
+        _vm.ExportInfoCommand.Execute(null);
 
     #endregion
 
@@ -608,31 +490,31 @@ public partial class PageInstanceSavesDatapack : IRefreshable, IPageView
             switch (_vm.Filter)
             {
                 case FilterType.All:
-                {
-                    BtnFilterAll.Checked = true;
-                    break;
-                }
+                    {
+                        BtnFilterAll.Checked = true;
+                        break;
+                    }
                 case FilterType.Enabled:
-                {
-                    BtnFilterEnabled.Checked = true;
-                    break;
-                }
+                    {
+                        BtnFilterEnabled.Checked = true;
+                        break;
+                    }
                 case FilterType.Disabled:
-                {
-                    BtnFilterDisabled.Checked = true;
-                    break;
-                }
+                    {
+                        BtnFilterDisabled.Checked = true;
+                        break;
+                    }
                 case FilterType.CanUpdate:
-                {
-                    BtnFilterCanUpdate.Checked = true;
-                    break;
-                }
+                    {
+                        BtnFilterCanUpdate.Checked = true;
+                        break;
+                    }
 
                 default:
-                {
-                    BtnFilterError.Checked = true;
-                    break;
-                }
+                    {
+                        BtnFilterError.Checked = true;
+                        break;
+                    }
             }
         }
         finally
@@ -803,7 +685,7 @@ public partial class PageInstanceSavesDatapack : IRefreshable, IPageView
         }
         else
         {
-            HintService.Hint(Lang.Text("Instance.Saves.Datapack.ToggleWarning"), HintType.Error);
+            HintService.Show(Hints.Error(Lang.Text("Instance.Saves.Datapack.ToggleWarning")));
             ReloadDatapackFileList(true);
         }
 
@@ -841,11 +723,14 @@ public partial class PageInstanceSavesDatapack : IRefreshable, IPageView
             // 更新前警告
             if (!States.Hint.FunctionDatapackUpdate || list.Count >= 15)
             {
-                if (1 != await Launcher.MyMsgBoxAsync(
-                        Lang.Text("Instance.Saves.Datapack.Update.Warning.Message"),
-                        Lang.Text("Instance.Saves.Datapack.Update.Warning.Title"),
-                        Lang.Text("Instance.Saves.Datapack.Update.Warning.Confirm"),
-                        Lang.Text("Common.Action.Cancel"), isWarn: true))
+                if (1 != (await DialogService.Instance.ShowAsync(new TextDialogRequest
+                {
+                    Title = Lang.Text("Instance.Saves.Datapack.Update.Warning.Title"),
+                    Content = Lang.Text("Instance.Saves.Datapack.Update.Warning.Message"),
+                    Buttons = DialogButtons.Create("Instance.Saves.Datapack.Update.Warning.Confirm", "Common.Action.Cancel"),
+                    IsWarn = true,
+                    ForceWait = false
+                })).Button)
                     return;
                 States.Hint.FunctionDatapackUpdate = true;
             }
@@ -903,7 +788,7 @@ public partial class PageInstanceSavesDatapack : IRefreshable, IPageView
             RefreshBars();
             if (!outcome.IsSuccessful)
             {
-                HintService.Hint(Lang.Text("Instance.Saves.Datapack.Delete.FileOccupied"), HintType.Error);
+                HintService.Show(Hints.Error(Lang.Text("Instance.Saves.Datapack.Delete.FileOccupied")));
                 ReloadDatapackFileList(true);
                 return;
             }
@@ -916,25 +801,17 @@ public partial class PageInstanceSavesDatapack : IRefreshable, IPageView
             if (isShiftPressed)
             {
                 if (outcome.Deleted.Count == 1)
-                    HintService.Hint(
-                        Lang.Text("Instance.Saves.Datapack.Delete.PermanentSingle", outcome.Deleted[0].FileName),
-                        HintType.Success);
+                    HintService.Show(Hints.Success(Lang.Text("Instance.Saves.Datapack.Delete.PermanentSingle", outcome.Deleted[0].FileName)));
                 else
-                    HintService.Hint(
-                        Lang.Text("Instance.Saves.Datapack.Delete.PermanentMultiple", outcome.Deleted.Count),
-                        HintType.Success);
+                    HintService.Show(Hints.Success(Lang.Text("Instance.Saves.Datapack.Delete.PermanentMultiple", outcome.Deleted.Count)));
             }
             else if (outcome.Deleted.Count == 1)
             {
-                HintService.Hint(
-                    Lang.Text("Instance.Saves.Datapack.Delete.RecycleSingle", outcome.Deleted[0].FileName),
-                    HintType.Success);
+                HintService.Show(Hints.Success(Lang.Text("Instance.Saves.Datapack.Delete.RecycleSingle", outcome.Deleted[0].FileName)));
             }
             else
             {
-                HintService.Hint(
-                    Lang.Text("Instance.Saves.Datapack.Delete.RecycleMultiple", outcome.Deleted.Count),
-                    HintType.Success);
+                HintService.Show(Hints.Success(Lang.Text("Instance.Saves.Datapack.Delete.RecycleMultiple", outcome.Deleted.Count)));
             }
 
             LoaderRun(Loading.LoaderFolderRunType.UpdateOnly);
@@ -989,11 +866,15 @@ public partial class PageInstanceSavesDatapack : IRefreshable, IPageView
             // 加载失败信息
             if (datapackEntry.State == LocalComp.LocalCompFile.LocalFileStatus.Unavailable)
             {
-                await Launcher.MyMsgBoxAsync(
-                    Lang.Text(
+                await DialogService.Instance.ShowAsync(new TextDialogRequest
+                {
+                    Title = Lang.Text("Instance.Saves.Datapack.Info.ReadFailedTitle"),
+                    Content = Lang.Text(
                         "Instance.Saves.Datapack.Info.ReadFailed.WithDetail",
                         datapackEntry.FileUnavailableReason.ToString()),
-                    Lang.Text("Instance.Saves.Datapack.Info.ReadFailedTitle"));
+                    Buttons = DialogButtons.Ok,
+                    ForceWait = false
+                });
                 return;
             }
 
@@ -1034,11 +915,20 @@ public partial class PageInstanceSavesDatapack : IRefreshable, IPageView
 
                 // 显示详情信息
                 if (datapackEntry.Url is null)
-                    await Launcher.MyMsgBoxAsync(contentLines.Join("\r\n"), datapackEntry.Name,
-                        Lang.Text("Instance.Resource.Item.Info.Return"));
-                else if (1 == await Launcher.MyMsgBoxAsync(contentLines.Join("\r\n"), datapackEntry.Name,
-                             Lang.Text("Instance.Resource.Item.Info.OpenWebsite"),
-                             Lang.Text("Instance.Resource.Item.Info.Return")))
+                    await DialogService.Instance.ShowAsync(new TextDialogRequest
+                    {
+                        Title = datapackEntry.Name,
+                        Content = contentLines.Join("\r\n"),
+                        Buttons = DialogButtons.Create("Instance.Resource.Item.Info.Return"),
+                        ForceWait = false
+                    });
+                else if (1 == (await DialogService.Instance.ShowAsync(new TextDialogRequest
+                {
+                    Title = datapackEntry.Name,
+                    Content = contentLines.Join("\r\n"),
+                    Buttons = DialogButtons.Create("Instance.Resource.Item.Info.OpenWebsite", "Instance.Resource.Item.Info.Return"),
+                    ForceWait = false
+                })).Button)
                     Common.OpenWebsite(datapackEntry.Url);
             }
         }
@@ -1053,22 +943,8 @@ public partial class PageInstanceSavesDatapack : IRefreshable, IPageView
     }
 
     // 打开文件所在的位置
-    public void Open_Click(MyIconButton sender, EventArgs e)
-    {
-        try
-        {
-            var listItem = (MyLocalCompItem)sender.Tag;
-            Common.OpenExplorer(listItem.Entry.path);
-        }
-        catch (Exception ex)
-        {
-            Common.Log(
-                ex,
-                "打开数据包文件位置失败",
-                Common.LogLevel.Feedback,
-                userSummary: Lang.Text("Instance.Saves.Error.OperationFailed"));
-        }
-    }
+    public void Open_Click(MyIconButton sender, EventArgs e) =>
+        _vm.OpenFileLocationCommand.Execute((sender.Tag as MyLocalCompItem)?.Entry);
 
     // 删除
     public void Delete_Click(MyIconButton sender, EventArgs e)
@@ -1123,13 +999,11 @@ public partial class PageInstanceSavesDatapack : IRefreshable, IPageView
                             searchSource.Add(new Common.SearchSource(Entry.Comp.TranslatedName, 1d));
                         if ((Entry.Comp.Description ?? "") != (Entry.Description ?? ""))
                             searchSource.Add(new Common.SearchSource(Entry.Comp.Description, 0.4d));
-                        searchSource.Add(new Common.SearchSource(
-                            string.Join("", Comp.GetLocalizedTags(Entry.Comp.Tags)),
-                            0.2d));
+                        searchSource.Add(new Common.SearchSource(string.Join("", Entry.Comp.Tags), 0.2d));
                     }
 
                     queryList.Add(new Common.SearchEntry<LocalComp.LocalCompFile>
-                        { item = Entry, searchSource = searchSource });
+                    { item = Entry, searchSource = searchSource });
                 }
 
                 // 进行搜索

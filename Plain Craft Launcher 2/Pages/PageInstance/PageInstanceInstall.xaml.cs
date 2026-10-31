@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -8,13 +8,14 @@ using System.Windows.Media;
 using System.Windows.Shapes;
 using PCL.Core.App;
 using PCL.Core.App.Localization;
+using PCL.Core.UI.Hints;
 using PCL.Core.UI;
+using PCL.Core.UI.Dialogs;
 using PCL.Core.Utils;
-using Path = System.IO.Path;
 
 namespace PCL;
 
-public partial class PageInstanceInstall
+public partial class PageInstanceInstall : IPageView
 {
     private enum InstallAction
     {
@@ -23,6 +24,7 @@ public partial class PageInstanceInstall
     }
 
     private bool isLoad;
+    private bool _refreshed;
     private string? lastVersionName;
     private InstallAction _installAction;
 
@@ -34,24 +36,10 @@ public partial class PageInstanceInstall
     {
         Initialized += (a, b) => LoaderInit();
         Loaded += (a, b) => Init();
+        Unloaded += (a, b) => _refreshed = false;
         InitializeComponent();
         DataContext = _vm;
-        LoadMinecraft.TrySetLocalizedValue("Text", "Download.Version.LoadingList");
-        WeakLanguageChanged.Add(this, OnLanguageChanged);
-    }
-
-    private static void OnLanguageChanged(PageInstanceInstall page)
-    {
-        page._OnLanguageChanged();
-    }
-
-    private void _OnLanguageChanged()
-    {
-        Common.RunInUi(() =>
-        {
-            LoadMinecraft.TrySetLocalizedValue("Text", "Download.Version.LoadingList");
-            ReloadSelected();
-        });
+        _vm.LoadingText = Lang.Text("Download.Version.LoadingList");
     }
 
     private void LoaderInit()
@@ -73,8 +61,15 @@ public partial class PageInstanceInstall
         PageExit += () => isInSelectPage = false;
     }
 
-    private void Init()
+    public void OnNavigatedTo(object? parameter) => RefreshOnNavigate();
+
+    public void OnNavigatedFrom() { }
+
+    private void RefreshOnNavigate()
     {
+        if (_refreshed) return;
+        _refreshed = true;
+
         PanBack.ScrollToHome();
 
         GetCurrentInfo();
@@ -92,6 +87,11 @@ public partial class PageInstanceInstall
         GameDownload.DlFabricApiLoader.Start(isForceRestart: needRefresh);
         GameDownload.DlLegacyFabricApiLoader.Start(isForceRestart: needRefresh);
         GameDownload.DlOptiFabricLoader.Start(isForceRestart: needRefresh);
+    }
+
+    private void Init()
+    {
+        RefreshOnNavigate();
 
         // 非重复加载部分
         if (isLoad)
@@ -122,7 +122,7 @@ public partial class PageInstanceInstall
         // Quilt 实例无法通过安装管线重装/修改（已移除 Quilt 安装支持）
         if (PageInstanceLeft.McInstance.Info.HasQuilt)
         {
-            HintService.Hint(Lang.Text("Instance.Overall.Reset.QuiltUnsupported"));
+            HintService.Show(Hints.Info(Lang.Text("Instance.Overall.Reset.QuiltUnsupported")));
             return;
         }
 
@@ -130,23 +130,29 @@ public partial class PageInstanceInstall
         if (_selectedLoaderType is not null &&
             (Config.Launch.IndieSolutionV2 == 0 ||
              Config.Launch.IndieSolutionV2 == 2))
-            if (Launcher.MyMsgBox(
-                    Lang.Text("Download.Install.InstanceIsolation.Warning.Message"), Lang.Text("Download.Install.InstanceIsolation.Warning.Title"), Lang.Text("Download.Install.InstanceIsolation.Warning.Cancel"), Lang.Text("Download.Install.InstanceIsolation.Warning.Continue")) == 1)
+            if ((DialogService.Instance.Show(new TextDialogRequest
+            {
+                Title = Lang.Text("Download.Install.InstanceIsolation.Warning.Title"),
+                Content = Lang.Text("Download.Install.InstanceIsolation.Warning.Message"),
+                Buttons = DialogButtons.Create("Download.Install.InstanceIsolation.Warning.Cancel", "Download.Install.InstanceIsolation.Warning.Continue"),
+                ForceWait = true
+            }).Result?.Button ?? 0) == 1)
                 return;
 
         if (_installAction == InstallAction.Reset)
-            if (Launcher.MyMsgBox(
-                    Lang.Text("Instance.Install.Reset.Message"),
-                    Lang.Text("Instance.Install.Reset.Title"),
-                    Lang.Text("Common.Action.Continue"),
-                    Lang.Text("Common.Action.Cancel")
-                ) == 2)
+            if ((DialogService.Instance.Show(new TextDialogRequest
+            {
+                Title = Lang.Text("Instance.Install.Reset.Title"),
+                Content = Lang.Text("Instance.Install.Reset.Message"),
+                Buttons = DialogButtons.ContinueCancel,
+                ForceWait = true
+            }).Result?.Button ?? 0) == 2)
                 return;
 
         // 删除 LabyMod Neo 文件
         if ((PageInstanceLeft.McInstance.PathIndie ?? "") != (PageInstanceLeft.McInstance.PathInstance ?? "") &&
             PageInstanceLeft.McInstance.Info.HasLabyMod)
-            Directory.Delete(Path.Combine(PageInstanceLeft.McInstance.PathIndie, "labymod-neo"), true);
+            Directory.Delete(System.IO.Path.Combine(PageInstanceLeft.McInstance.PathIndie, "labymod-neo"), true);
         // 备份实例核心文件
         Common.CopyFile(PageInstanceLeft.McInstance.PathInstance + PageInstanceLeft.McInstance.Name + ".json",
             PageInstanceLeft.McInstance.PathInstance + @"PCLInstallBackups\" + PageInstanceLeft.McInstance.Name + ".json");
@@ -212,9 +218,7 @@ public partial class PageInstanceInstall
             case MyLoading.MyLoadingState.Error:
             {
                 var message = ((Loading.LoaderBase)loader.State).Error.Message;
-                return message == Lang.Text("Download.Install.State.NoVersion")
-                    ? Lang.Text("Download.Install.State.NoVersion")
-                    : Lang.Text("Download.Install.State.GetFailed", message);
+                return message == Lang.Text("Download.Install.State.NoVersion") ? Lang.Text("Download.Install.State.NoVersion") : Lang.Text("Download.Install.State.GetFailed", message);
             }
             case MyLoading.MyLoadingState.Unloaded:
             {
@@ -245,8 +249,8 @@ public partial class PageInstanceInstall
         autoSelectedFabricApi = false;
         autoSelectedOptiFabric = false;
         PanSelect.Visibility = Visibility.Visible;
-        PanSelect.IsHitTestVisible = true;
-        PanMinecraft.IsHitTestVisible = false;
+        _vm.PanSelectHitTestVisible = true;
+        _vm.PanMinecraftHitTestVisible = false;
         PanBack.IsHitTestVisible = false;
         PanBack.ScrollToHome();
 
@@ -266,7 +270,7 @@ public partial class PageInstanceInstall
         if (!(bool)States.Hint.InstallPageBack)
         {
             States.Hint.InstallPageBack = true;
-            HintService.Hint(Lang.Text("Download.Install.Hint.MinecraftBack"));
+            HintService.Show(Hints.Info(Lang.Text("Download.Install.Hint.MinecraftBack")));
         }
 
         // 如果在选择页面按了刷新键，选择页的东西可能会由于动画被隐藏，但不会由于加载结束而再次显示，因此这里需要手动恢复
@@ -359,8 +363,8 @@ public partial class PageInstanceInstall
 
         ClearSelected(); // 清除已选择项
         PanMinecraft.Visibility = Visibility.Visible;
-        PanSelect.IsHitTestVisible = false;
-        PanMinecraft.IsHitTestVisible = true;
+        _vm.PanSelectHitTestVisible = false;
+        _vm.PanMinecraftHitTestVisible = true;
         PanBack.IsHitTestVisible = false;
         PanBack.ScrollToHome();
 
@@ -484,7 +488,7 @@ public partial class PageInstanceInstall
         // Minecraft
         ImgMinecraft.Source = new MyBitmap(_vanillaIcon);
         _vm.MinecraftText = _vanillaName;
-        LabMinecraft.Foreground = ThemeManager.colorGray1;
+        _vm.MinecraftForeground = ThemeManager.colorGray1;
         // OptiFine
         if (!McVersionComparer.CompareVersionGe(_vanillaName, "1.7.2"))
         {
@@ -503,14 +507,14 @@ public partial class PageInstanceInstall
                 _vm.ShowOptiFineClear = false;
                 _vm.ShowOptiFineImage = false;
                 _vm.OptiFineText = optiFineError ?? Lang.Text("Download.Install.State.CanAdd");
-                LabOptiFine.Foreground = ThemeManager.colorGray4;
+                _vm.OptiFineForeground = ThemeManager.colorGray4;
             }
             else
             {
                 _vm.ShowOptiFineClear = true;
                 _vm.ShowOptiFineImage = true;
                 _vm.OptiFineText = selectedOptiFine.DisplayName.Replace(_vanillaName + " ", "");
-                LabOptiFine.Foreground = ThemeManager.colorGray1;
+                _vm.OptiFineForeground = ThemeManager.colorGray1;
             }
         }
 
@@ -534,14 +538,14 @@ public partial class PageInstanceInstall
                 _vm.ShowLiteLoaderClear = false;
                 _vm.ShowLiteLoaderImage = false;
                 _vm.LiteLoaderText = liteLoaderError ?? Lang.Text("Download.Install.State.CanAdd");
-                LabLiteLoader.Foreground = ThemeManager.colorGray4;
+                _vm.LiteLoaderForeground = ThemeManager.colorGray4;
             }
             else
             {
                 _vm.ShowLiteLoaderClear = true;
                 _vm.ShowLiteLoaderImage = true;
                 _vm.LiteLoaderText = selectedLiteLoader.Inherit;
-                LabLiteLoader.Foreground = ThemeManager.colorGray1;
+                _vm.LiteLoaderForeground = ThemeManager.colorGray1;
             }
         }
 
@@ -564,14 +568,14 @@ public partial class PageInstanceInstall
                 _vm.ShowForgeClear = false;
                 _vm.ShowForgeImage = false;
                 _vm.ForgeText = forgeError ?? Lang.Text("Download.Install.State.CanAdd");
-                LabForge.Foreground = ThemeManager.colorGray4;
+                _vm.ForgeForeground = ThemeManager.colorGray4;
             }
             else
             {
                 _vm.ShowForgeClear = true;
                 _vm.ShowForgeImage = true;
                 _vm.ForgeText = selectedForge.VersionName;
-                LabForge.Foreground = ThemeManager.colorGray1;
+                _vm.ForgeForeground = ThemeManager.colorGray1;
             }
         }
 
@@ -589,14 +593,14 @@ public partial class PageInstanceInstall
                 _vm.ShowCleanroomClear = false;
                 _vm.ShowCleanroomImage = false;
                 _vm.CleanroomText = cleanroomError ?? Lang.Text("Download.Install.State.CanAdd");
-                LabCleanroom.Foreground = ThemeManager.colorGray4;
+                _vm.CleanroomForeground = ThemeManager.colorGray4;
             }
             else
             {
                 _vm.ShowCleanroomClear = true;
                 _vm.ShowCleanroomImage = true;
                 _vm.CleanroomText = selectedCleanroom.VersionName;
-                LabCleanroom.Foreground = ThemeManager.colorGray1;
+                _vm.CleanroomForeground = ThemeManager.colorGray1;
             }
         }
         else
@@ -622,14 +626,14 @@ public partial class PageInstanceInstall
                 _vm.ShowNeoForgeClear = false;
                 _vm.ShowNeoForgeImage = false;
                 _vm.NeoForgeText = neoForgeError ?? Lang.Text("Download.Install.State.CanAdd");
-                LabNeoForge.Foreground = ThemeManager.colorGray4;
+                _vm.NeoForgeForeground = ThemeManager.colorGray4;
             }
             else
             {
                 _vm.ShowNeoForgeClear = true;
                 _vm.ShowNeoForgeImage = true;
                 _vm.NeoForgeText = selectedNeoForge.VersionName;
-                LabNeoForge.Foreground = ThemeManager.colorGray1;
+                _vm.NeoForgeForeground = ThemeManager.colorGray1;
             }
         }
 
@@ -652,14 +656,14 @@ public partial class PageInstanceInstall
                 _vm.ShowFabricClear = false;
                 _vm.ShowFabricImage = false;
                 _vm.FabricText = fabricError ?? Lang.Text("Download.Install.State.CanAdd");
-                LabFabric.Foreground = ThemeManager.colorGray4;
+                _vm.FabricForeground = ThemeManager.colorGray4;
             }
             else
             {
                 _vm.ShowFabricClear = true;
                 _vm.ShowFabricImage = true;
                 _vm.FabricText = selectedFabric.Replace("+build", "");
-                LabFabric.Foreground = ThemeManager.colorGray1;
+                _vm.FabricForeground = ThemeManager.colorGray1;
             }
         }
 
@@ -681,7 +685,7 @@ public partial class PageInstanceInstall
                 _vm.ShowFabricApiClear = false;
                 _vm.ShowFabricApiImage = false;
                 _vm.FabricApiText = fabricApiError ?? Lang.Text("Download.Install.State.CanAdd");
-                LabFabricApi.Foreground = ThemeManager.colorGray4;
+                _vm.FabricApiForeground = ThemeManager.colorGray4;
             }
             else
             {
@@ -689,7 +693,7 @@ public partial class PageInstanceInstall
                 _vm.ShowFabricApiImage = true;
                 _vm.FabricApiText = selectedFabricApi.DisplayName.Split("]")[1].Replace("Fabric API ", "")
                     .Replace(" build ", ".").Split("+").First().Trim();
-                LabFabricApi.Foreground = ThemeManager.colorGray1;
+                _vm.FabricApiForeground = ThemeManager.colorGray1;
             }
         }
 
@@ -712,14 +716,14 @@ public partial class PageInstanceInstall
                 _vm.ShowLegacyFabricClear = false;
                 _vm.ShowLegacyFabricImage = false;
                 _vm.LegacyFabricText = legacyFabricError ?? Lang.Text("Download.Install.State.CanAdd");
-                LabLegacyFabric.Foreground = ThemeManager.colorGray4;
+                _vm.LegacyFabricForeground = ThemeManager.colorGray4;
             }
             else
             {
                 _vm.ShowLegacyFabricClear = true;
                 _vm.ShowLegacyFabricImage = true;
                 _vm.LegacyFabricText = selectedLegacyFabric.Replace("+build", "");
-                LabLegacyFabric.Foreground = ThemeManager.colorGray1;
+                _vm.LegacyFabricForeground = ThemeManager.colorGray1;
             }
         }
 
@@ -742,14 +746,14 @@ public partial class PageInstanceInstall
                 _vm.ShowLegacyFabricApiClear = false;
                 _vm.ShowLegacyFabricApiImage = false;
                 _vm.LegacyFabricApiText = legacyFabricApiError ?? Lang.Text("Download.Install.State.CanAdd");
-                LabLegacyFabricApi.Foreground = ThemeManager.colorGray4;
+                _vm.LegacyFabricApiForeground = ThemeManager.colorGray4;
             }
             else
             {
                 _vm.ShowLegacyFabricApiClear = true;
                 _vm.ShowLegacyFabricApiImage = true;
                 _vm.LegacyFabricApiText = selectedLegacyFabricApi.DisplayName.Replace("Legacy Fabric API ", "");
-                LabLegacyFabricApi.Foreground = ThemeManager.colorGray1;
+                _vm.LegacyFabricApiForeground = ThemeManager.colorGray1;
             }
         }
 
@@ -772,14 +776,14 @@ public partial class PageInstanceInstall
                 _vm.ShowLabyModClear = false;
                 _vm.ShowLabyModImage = false;
                 _vm.LabyModText = labyModError ?? Lang.Text("Download.Install.State.CanAdd");
-                LabLabyMod.Foreground = ThemeManager.colorGray4;
+                _vm.LabyModForeground = ThemeManager.colorGray4;
             }
             else
             {
                 _vm.ShowLabyModClear = true;
                 _vm.ShowLabyModImage = true;
                 _vm.LabyModText = selectedLabyModVersion;
-                LabLabyMod.Foreground = ThemeManager.colorGray1;
+                _vm.LabyModForeground = ThemeManager.colorGray1;
             }
         }
 
@@ -801,7 +805,7 @@ public partial class PageInstanceInstall
                 _vm.ShowOptiFabricClear = false;
                 _vm.ShowOptiFabricImage = false;
                 _vm.OptiFabricText = optiFabricError ?? Lang.Text("Download.Install.State.CanAdd");
-                LabOptiFabric.Foreground = ThemeManager.colorGray4;
+                _vm.OptiFabricForeground = ThemeManager.colorGray4;
             }
             else
             {
@@ -809,7 +813,7 @@ public partial class PageInstanceInstall
                 _vm.ShowOptiFabricImage = true;
                 _vm.OptiFabricText = selectedOptiFabric.DisplayName.ToLower().Replace("optifabric-", "")
                     .Replace(".jar", "").Trim().TrimStart('v');
-                LabOptiFabric.Foreground = ThemeManager.colorGray1;
+                _vm.OptiFabricForeground = ThemeManager.colorGray1;
             }
         }
 
@@ -1071,83 +1075,59 @@ public partial class PageInstanceInstall
         ClearSelected();
         _vm.CanStartInstall = true;
         var currentInstance = PageInstanceLeft.McInstance.Info;
-        var vanillaName = currentInstance.VanillaName ?? string.Empty;
-        _vanillaName = vanillaName;
+        _vanillaName = currentInstance.VanillaName;
         if (currentInstance.HasLiteLoader)
-            selectedLiteLoader = new GameDownload.DlLiteLoaderListEntry { Inherit = vanillaName };
-        if (currentInstance.HasOptiFine && !string.IsNullOrEmpty(currentInstance.OptiFine))
-        {
-            var optiFineVersion = currentInstance.OptiFine;
+            selectedLiteLoader = new GameDownload.DlLiteLoaderListEntry { Inherit = currentInstance.VanillaName };
+        if (currentInstance.HasOptiFine)
             selectedOptiFine = new GameDownload.DlOptiFineListEntry
             {
-                DisplayName = vanillaName + " " + optiFineVersion.Replace("_", " "),
-                IsPreview = optiFineVersion.ContainsF("pre"), Inherit = vanillaName,
-                NameVersion = vanillaName + "-OptiFine_HD_U_" + optiFineVersion
+                DisplayName = currentInstance.VanillaName + " " + currentInstance.OptiFine.Replace("_", " "),
+                IsPreview = currentInstance.OptiFine.ContainsF("pre"), Inherit = currentInstance.VanillaName,
+                NameVersion = currentInstance.VanillaName + "-OptiFine_HD_U_" + currentInstance.OptiFine
             };
-        }
-
         if (currentInstance.HasCleanroom)
         {
-            if (!string.IsNullOrEmpty(currentInstance.Cleanroom))
-            {
-                _selectedLoaderType = ModLoaderType.Cleanroom;
-                selectedAPIName = "Cleanroom";
-                selectedCleanroomVersion = currentInstance.Cleanroom;
-                selectedCleanroom = new GameDownload.DlCleanroomListEntry(selectedCleanroomVersion);
-            }
+            _selectedLoaderType = ModLoaderType.Cleanroom;
+            selectedAPIName = "Cleanroom";
+            selectedCleanroomVersion = currentInstance.Cleanroom;
+            selectedCleanroom = new GameDownload.DlCleanroomListEntry(selectedCleanroomVersion);
         }
         else if (currentInstance.HasForge)
         {
-            if (!string.IsNullOrEmpty(currentInstance.Forge))
-            {
-                _selectedLoaderType = ModLoaderType.Forge;
-                selectedForge =
-                    new GameDownload.DlForgeVersionEntry(currentInstance.Forge, null, vanillaName)
-                    {
-                        Category = "installer",
-                        forgeType = GameDownload.DlForgelikeEntry.ForgelikeType.Forge,
-                        Inherit = vanillaName
-                    };
-            }
+            _selectedLoaderType = ModLoaderType.Forge;
+            selectedForge =
+                new GameDownload.DlForgeVersionEntry(currentInstance.Forge, null, currentInstance.VanillaName)
+                {
+                    Category = "installer", forgeType = GameDownload.DlForgelikeEntry.ForgelikeType.Forge,
+                    Inherit = currentInstance.VanillaName
+                };
         }
         else if (currentInstance.HasLegacyFabric)
         {
-            if (!string.IsNullOrEmpty(currentInstance.LegacyFabric))
-            {
-                _selectedLoaderType = ModLoaderType.LegacyFabric;
-                selectedLegacyFabric = currentInstance.LegacyFabric;
-                selectedLegacyFabricApi = (Comp.CompFile)GetCurrentLegacyFabricApi();
-            }
+            _selectedLoaderType = ModLoaderType.LegacyFabric;
+            selectedLegacyFabric = currentInstance.LegacyFabric;
+            selectedLegacyFabricApi = (Comp.CompFile)GetCurrentLegacyFabricApi();
         }
         else if (currentInstance.HasFabric)
         {
-            if (!string.IsNullOrEmpty(currentInstance.Fabric))
-            {
-                _selectedLoaderType = ModLoaderType.Fabric;
-                selectedFabric = currentInstance.Fabric;
-                selectedFabricApi = (Comp.CompFile)GetCurrentFabricApi();
-            }
+            _selectedLoaderType = ModLoaderType.Fabric;
+            selectedFabric = currentInstance.Fabric;
+            selectedFabricApi = (Comp.CompFile)GetCurrentFabricApi();
         }
         else if (currentInstance.HasLabyMod)
         {
-            if (!string.IsNullOrEmpty(currentInstance.LabyMod))
-            {
-                _selectedLoaderType = ModLoaderType.LabyMod;
-                selectedLabyModVersion = currentInstance.LabyMod;
-            }
+            _selectedLoaderType = ModLoaderType.LabyMod;
+            selectedLabyModVersion = currentInstance.LabyMod;
         }
         else if (currentInstance.HasNeoForge)
         {
-            if (!string.IsNullOrEmpty(currentInstance.NeoForge))
+            _selectedLoaderType = ModLoaderType.NeoForge;
+            selectedNeoForgeVersion = currentInstance.NeoForge;
+            selectedNeoForge = new GameDownload.DlNeoForgeListEntry(currentInstance.NeoForge)
             {
-                _selectedLoaderType = ModLoaderType.NeoForge;
-                selectedNeoForgeVersion = currentInstance.NeoForge;
-                selectedNeoForge = new GameDownload.DlNeoForgeListEntry(currentInstance.NeoForge)
-                {
-                    VersionName = currentInstance.NeoForge, Inherit = vanillaName,
-                    forgeType = GameDownload.DlForgelikeEntry.ForgelikeType.NeoForge
-                };
-            }
+                VersionName = currentInstance.NeoForge, Inherit = currentInstance.VanillaName,
+                forgeType = GameDownload.DlForgelikeEntry.ForgelikeType.NeoForge
+            };
         }
 
         if (currentInstance.HasFabric && currentInstance.HasOptiFine)
@@ -1164,18 +1144,6 @@ public partial class PageInstanceInstall
     #region 加载器
 
     // 结果数据化
-    private static string? GetVersionTypeKey(string key)
-    {
-        return key switch
-        {
-            "正式版" => "Download.Version.Type.Release",
-            "预览版" => "Download.Version.Type.Development",
-            "远古版" => "Download.Version.Type.BeforeRelease",
-            "愚人节版" => "Download.Version.Type.AprilFools",
-            _ => null
-        };
-    }
-
     private static string GetVersionTypeTitle(string key) =>
         PageInstanceInstallViewModel.GetVersionTypeTitle(key);
 
@@ -1231,8 +1199,7 @@ public partial class PageInstanceInstall
                                     type = "愚人节版";
                                     Version["id"] = Version["id"].ToString().Replace("point", ".");
                                     Version["type"] = "special";
-                                    Version["lore"] =
-                                        McVersionClassifier.GetMcFoolNameKey((string)Version["id"]);
+                                    Version.Add("lore", McVersionClassifier.GetMcFoolName((string)Version["id"]));
                                     break;
                                 }
                                 case "20w14infinite":
@@ -1241,8 +1208,7 @@ public partial class PageInstanceInstall
                                     type = "愚人节版";
                                     Version["id"] = "20w14∞";
                                     Version["type"] = "special";
-                                    Version["lore"] =
-                                        McVersionClassifier.GetMcFoolNameKey((string)Version["id"]);
+                                    Version.Add("lore", McVersionClassifier.GetMcFoolName((string)Version["id"]));
                                     break;
                                 }
                                 case "3d shareware v1.34":
@@ -1257,9 +1223,8 @@ public partial class PageInstanceInstall
                                 {
                                     type = "愚人节版";
                                     Version["type"] = "special";
-                                    Version["lore"] =
-                                        McVersionClassifier.GetMcFoolNameKey(
-                                            (string)Version["id"]); // 4/1 自动视作愚人节版
+                                    Version.Add("lore",
+                                        McVersionClassifier.GetMcFoolName((string)Version["id"])); // 4/1 自动视作愚人节版
                                     break;
                                 }
 
@@ -1302,25 +1267,15 @@ public partial class PageInstanceInstall
                 // 清空当前
                 PanMinecraft.Children.Clear();
                 // 添加最新版本
-                var cardInfo = new MyCard { Margin = new Thickness(0d, 15d, 0d, 15d) };
-                LocalizedText.TryBind(
-                    cardInfo,
-                    "Title",
-                    () => Lang.Text("Download.Version.Latest.Title"));
+                var cardInfo = new MyCard { Title = Lang.Text("Download.Version.Latest.Title"), Margin = new Thickness(0d, 15d, 0d, 15d) };
                 var topestVersions = new List<JsonObject>();
                 var release = (JsonObject)dict["正式版"][0].DeepClone();
-                release["lore"] = "Download.Version.Latest.Release";
-                release["loreArgs"] =
-                    new JsonArray(release["releaseTime"].ToObject<DateTime>().ToString("O"));
-                release["loreArgsType"] = "date";
+                release["lore"] = Lang.Text("Download.Version.Latest.Release", Lang.Date(release["releaseTime"].ToObject<DateTime>(), "g"));
                 topestVersions.Add(release);
                 if (dict["正式版"][0]["releaseTime"].ToObject<DateTime>() < dict["预览版"][0]["releaseTime"].ToObject<DateTime>())
                 {
                     var snapshot = (JsonObject)dict["预览版"][0].DeepClone();
-                    snapshot["lore"] = "Download.Version.Latest.Development";
-                    snapshot["loreArgs"] =
-                        new JsonArray(snapshot["releaseTime"].ToObject<DateTime>().ToString("O"));
-                    snapshot["loreArgsType"] = "date";
+                    snapshot["lore"] = Lang.Text("Download.Version.Latest.Development", Lang.Date(snapshot["releaseTime"].ToObject<DateTime>(), "g"));
                     topestVersions.Add(snapshot);
                 }
 
@@ -1348,15 +1303,8 @@ public partial class PageInstanceInstall
                     if (!Pair.Value.Any())
                         continue;
                     // 增加卡片
-                    var newCard = new MyCard { Margin = new Thickness(0d, 0d, 0d, 15d) };
-                    var typeTitleFallback = GetVersionTypeTitle(Pair.Key);
-                    var typeKey = GetVersionTypeKey(Pair.Key);
-                    var typeCount = Pair.Value.Count;
-                    LocalizedText.TryBind(
-                        newCard,
-                        "Title",
-                        () =>
-                            $"{(typeKey is null ? typeTitleFallback : Lang.Text(typeKey))} ({typeCount})");
+                    var newCard = new MyCard
+                        { Title = GetVersionTypeTitle(Pair.Key) + " (" + Pair.Value.Count + ")", Margin = new Thickness(0d, 0d, 0d, 15d) };
                     var newStack = new StackPanel
                     {
                         Margin = new Thickness(20d, MyCard.SwapedHeight, 18d, 0d),
@@ -1382,8 +1330,6 @@ public partial class PageInstanceInstall
                     var item = DownloadUi.McDownloadListItem(Version, (_, _) => { }, false);
                     MinecraftSelected(item, null);
                 }
-
-                mcVersionWaitingForSelect = null;
             }
             catch (Exception ex)
             {
@@ -2116,22 +2062,22 @@ public partial class PageInstanceInstall
                 return;
             versions = versions.OrderByDescending(v => v.ReleaseDate).ToList();
             // 可视化
-            PanFabricApi.Children.Clear();
+            var rows = new List<FabricApiVersionRow>();
             foreach (var version in versions)
             {
                 if (!IsFabricApiCompatible(version))
                     continue;
-                PanFabricApi.Children.Add(
-                    DownloadUi.FabricApiDownloadListItem(version,
-                        (a, b) => this.FabricApi_Selected((dynamic)a, b)));
+                rows.Add(DownloadUi.FabricApiVersionRowBuild(version));
             }
 
+            _vm.SetFabricApiVersions(rows);
+
             // 自动选择 Fabric API
-            if (!autoSelectedFabricApi)
+            if (!autoSelectedFabricApi && rows.Count > 0)
             {
                 autoSelectedFabricApi = true;
-                Common.Log($"[Download] 已自动选择 Fabric API：{((MyListItem)PanFabricApi.Children[0]).Title}");
-                FabricApi_Selected((MyListItem)PanFabricApi.Children[0], null);
+                Common.Log($"[Download] 已自动选择 Fabric API：{rows[0].Title}");
+                SelectFabricApi(rows[0].Entry);
             }
         }
         catch (Exception ex)
@@ -2145,9 +2091,14 @@ public partial class PageInstanceInstall
     }
 
     // 选择与清除
-    private void FabricApi_Selected(MyListItem sender, EventArgs e)
+    private void FabricApi_Selected(object sender, MouseButtonEventArgs e)
     {
-        selectedFabricApi = (Comp.CompFile)sender.Tag;
+        SelectFabricApi((Comp.CompFile)((MyListItem)sender).Tag);
+    }
+
+    private void SelectFabricApi(Comp.CompFile entry)
+    {
+        selectedFabricApi = entry;
         selectedAPIName = "Fabric API";
         CardFabricApi.IsSwapped = true;
         ReloadSelected();
@@ -2262,7 +2213,9 @@ public partial class PageInstanceInstall
     {
         try
         {
-            return Comp.ContainsGameVersion(supportVersions, minecraftVersion);
+            if (supportVersions.Contains(minecraftVersion)) return true;
+
+            return false;
         }
         catch (Exception ex)
         {
@@ -2391,7 +2344,7 @@ public partial class PageInstanceInstall
         {
             if (_vanillaName is null)
                 return false;
-            return Comp.ContainsGameVersion(modFile.GameVersions, _vanillaName);
+            return modFile.GameVersions.Contains(_vanillaName);
         }
         catch (Exception ex)
         {

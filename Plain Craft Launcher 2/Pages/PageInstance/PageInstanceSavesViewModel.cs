@@ -1,9 +1,12 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.IO;
+using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Microsoft.VisualBasic.FileIO;
 using PCL.Core.App.Localization;
+using PCL.Core.UI.Hints;
 using PCL.Core.ViewModel;
 
 namespace PCL;
@@ -129,7 +132,7 @@ public partial class PageInstanceSavesViewModel : ViewModelBase
                 {
                     if (Directory.Exists(worldPath + GetFolderNameFromPath(i)))
                     {
-                        HintService.Hint(Lang.Text("Instance.Saves.DuplicateFolder", GetFolderNameFromPath(i)));
+                        HintService.Show(Hints.Info(Lang.Text("Instance.Saves.DuplicateFolder", GetFolderNameFromPath(i))));
                     }
                     else
                     {
@@ -139,7 +142,7 @@ public partial class PageInstanceSavesViewModel : ViewModelBase
                 }
                 else
                 {
-                    HintService.Hint(Lang.Text("Instance.Saves.SourceNotFolder"));
+                    HintService.Show(Hints.Info(Lang.Text("Instance.Saves.SourceNotFolder")));
                 }
             }
             catch (Exception ex)
@@ -149,6 +152,78 @@ public partial class PageInstanceSavesViewModel : ViewModelBase
             }
 
         return copied;
+    }
+
+    [RelayCommand]
+    private void OpenFolder()
+    {
+        Common.OpenExplorer(WorldPath);
+    }
+
+    [RelayCommand]
+    private void OpenSaveFolder(string? folder)
+    {
+        if (folder is null)
+            return;
+        Common.OpenExplorer(folder);
+    }
+
+    [RelayCommand]
+    private void OpenDetails(string? folder)
+    {
+        if (folder is null)
+            return;
+        Launcher.frmMain.PageChange(new FormMain.PageStackData
+        {
+            page = FormMain.PageType.VersionSaves,
+            additional = (null, null, null, Comp.CompLoaderType.Any, Comp.CompType.Any, folder)
+        });
+    }
+
+    [RelayCommand]
+    private void CopySave(string? folder)
+    {
+        if (folder is null)
+            return;
+        try
+        {
+            if (Directory.Exists(folder))
+            {
+                Clipboard.SetFileDropList(new StringCollection { folder });
+                HintService.Show(Hints.Info(Lang.Text("Instance.Saves.CopiedToClipboard")));
+                HintService.Show(Hints.Info(Lang.Text("Instance.Saves.CopyPasteWarning")));
+            }
+            else
+            {
+                HintService.Show(Hints.Info(Lang.Text("Instance.Saves.FolderNotFound")));
+            }
+        }
+        catch (Exception ex)
+        {
+            Common.Log(ex, Lang.Text("Instance.Saves.CopyFailed"), Common.LogLevel.Hint,
+                userSummary: Lang.Text("Instance.Saves.CopyFailed"));
+        }
+    }
+
+    [RelayCommand]
+    private void LaunchSave(string? folder)
+    {
+        if (folder is null)
+            return;
+        var launchOptions = new GameLaunch.McLaunchOptions
+        {
+            WorldName = Path.GetFileName(folder),
+            instance = PageInstanceLeft.McInstance
+        };
+        GameLaunch.McLaunchStart(launchOptions);
+        Launcher.frmMain.PageChange(new FormMain.PageStackData { page = FormMain.PageType.Launch });
+    }
+
+    [RelayCommand]
+    private void DownloadNew()
+    {
+        Launcher.frmMain.PageChange(FormMain.PageType.Download, FormMain.PageSubType.DownloadWorld);
+        PageComp.targetVersion = PageInstanceLeft.McInstance;
     }
 
     private async Task ApplyListAsync(bool rescan)

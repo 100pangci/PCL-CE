@@ -1,6 +1,7 @@
 ﻿using System.Windows.Controls;
 using System.Windows.Input;
 using PCL.Core.App.Localization;
+using PCL.Core.UI.Hints;
 
 namespace PCL;
 
@@ -186,7 +187,7 @@ public partial class PageDownloadLeft : IRefreshable
             }
         }
 
-        HintService.Hint(Lang.Text("Download.Left.Hint.Refreshing"), log: false);
+        HintService.Show(Hints.Info(Lang.Text("Download.Left.Hint.Refreshing"), log: false));
     }
 
     // 点击返回
@@ -207,22 +208,6 @@ public partial class PageDownloadLeft : IRefreshable
     public PageDownloadLeft()
     {
         InitializeComponent();
-        ItemInstall.Check += PageCheck;
-        ItemMod.Check += PageCheck;
-        ItemPack.Check += PageCheck;
-        ItemDataPack.Check += PageCheck;
-        ItemResourcePack.Check += PageCheck;
-        ItemShader.Check += PageCheck;
-        ItemWorld.Check += PageCheck;
-        ItemFavorites.Check += PageCheck;
-        ItemClient.Check += PageCheck;
-        ItemOptiFine.Check += PageCheck;
-        ItemForge.Check += PageCheck;
-        ItemNeoForge.Check += PageCheck;
-        ItemLiteLoader.Check += PageCheck;
-        ItemFabric.Check += PageCheck;
-        ItemLegacyFabric.Check += PageCheck;
-        ItemLabyMod.Check += PageCheck;
 
         AnimatedControl = PanItem;
     }

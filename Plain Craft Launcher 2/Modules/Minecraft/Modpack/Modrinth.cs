@@ -1,6 +1,8 @@
 ﻿using System.IO;
 using System.IO.Compression;
 using PCL.Core.App.Localization;
+using PCL.Core.UI.Hints;
+using PCL.Core.UI.Dialogs;
 using PCL.Core.Utils;
 using PCL.Network;
 using PCL.Network.Loaders;
@@ -69,7 +71,7 @@ public static partial class Modpack
         var loaderIdentifier = $"Modpack:Modrinth:{instanceName}";
         if (loaderTaskbar.Any(l => l.Identifier == loaderIdentifier))
         {
-            HintService.Hint(Lang.Text("Minecraft.Download.Modpack.Installing"), HintType.Error);
+            HintService.Show(Hints.Error(Lang.Text("Minecraft.Download.Modpack.Installing")));
             throw new Common.CancelledException();
         }
 
@@ -139,13 +141,11 @@ public static partial class Modpack
                     throw new Exception(Lang.Text("Minecraft.Download.Modpack.QuiltUnsupported"));
 
                 default:
-                    HintService.Hint(
-                        Lang.Text(
+                    HintService.Show(Hints.Error(Lang.Text(
                             "Minecraft.Download.Modpack.UnknownLoader",
                             entry.Key,
                             entry.Value
-                        ),
-                        HintType.Error);
+                        )));
                     break;
             }
 
@@ -208,10 +208,14 @@ public static partial class Modpack
                     .GetFullPath(targetPath)
                     .StartsWithF($@"{GameFolders.mcFolderSelected}versions\{instanceName}\", true))
             {
-                Launcher.MyMsgBox(
-                    Lang.Text("Minecraft.Download.Modpack.PathOutsideInstance.Message", targetPath),
-                    Lang.Text("Minecraft.Download.Modpack.PathOutsideInstance.Title"),
-                    isWarn: true);
+                DialogService.Instance.Show(new TextDialogRequest
+                {
+                    Title = Lang.Text("Minecraft.Download.Modpack.PathOutsideInstance.Title"),
+                    Content = Lang.Text("Minecraft.Download.Modpack.PathOutsideInstance.Message", targetPath),
+                    Buttons = DialogButtons.Ok,
+                    IsWarn = true,
+                    ForceWait = true
+                });
                 throw new Common.CancelledException();
             }
 
@@ -242,16 +246,19 @@ public static partial class Modpack
 
         return env["client"]!.ToString() switch
         {
-            "optional" => Launcher.MyMsgBox(
-                    Lang.Text(
+            "optional" => DialogService.Instance.Show(new TextDialogRequest
+                {
+                    Title = Lang.Text("Minecraft.Download.Modpack.OptionalFile.Title"),
+                    Content = Lang.Text(
                         "Minecraft.Download.Modpack.OptionalFile.Message",
                         Common.GetFileNameFromPath(file["path"]!.ToString())
                     ),
-                    Lang.Text("Minecraft.Download.Modpack.OptionalFile.Title"),
-                    Lang.Text("Minecraft.Download.Modpack.OptionalFile.Download"),
-                    Lang.Text("Minecraft.Download.Modpack.OptionalFile.Skip")
-                )
-                != 2,
+                    Buttons = DialogButtons.From(
+                        DialogButton.Create(Lang.Text("Minecraft.Download.Modpack.OptionalFile.Download")),
+                        DialogButton.Create(Lang.Text("Minecraft.Download.Modpack.OptionalFile.Skip"))),
+                    ForceWait = true
+                }).Result
+                ?.Button != 2,
             "unsupported" => false,
             _ => true
         };
